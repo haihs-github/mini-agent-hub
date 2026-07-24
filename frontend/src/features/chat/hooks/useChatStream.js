@@ -1,76 +1,69 @@
 // file này chứa custom Hook quản lý logic chat stream và hội thoại, giúp tách biệt rõ ràng phần logic nghiệp vụ với phần UI trình bày
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   getConversationsApi,
   getConversationDetailApi,
   createConversationApi,
 } from "@/features/chat/chatApi";
-// BKAV HaiHS : Import getAccessToken de lay token tu RAM cho fetch/SSE - start
 import { getAccessToken } from "@/services/apiClient";
 import { useLanguage } from "@/context/LanguageContext";
-// BKAV HaiHS : Import getAccessToken de lay token tu RAM cho fetch/SSE - end
 
-// Hàm giải mã/lọc dữ liệu SSE nếu gặp chuỗi thô từ DB cũ (legacy data)
-const cleanSSEContent = (content) => {
-  if (!content || !content.includes("data: ")) return content;
-
-  let accumulated = "";
-  const lines = content.split("\n");
-  for (const line of lines) {
-    const cleanedLine = line.trim();
-    if (!cleanedLine || !cleanedLine.startsWith("data: ")) continue;
-
-    const dataStr = cleanedLine.replace("data: ", "").trim();
-    if (dataStr.startsWith("[DONE]")) continue;
-
-    try {
-      const parsed = JSON.parse(dataStr);
-      if (parsed.choices?.[0]?.delta?.content !== undefined) {
-        accumulated += parsed.choices[0].delta.content;
-      } else if (parsed.content !== undefined) {
-        if (
-          typeof parsed.content === "string" &&
-          parsed.content.startsWith("data: ")
-        ) {
-          const innerStr = parsed.content.replace("data: ", "").trim();
-          const innerParsed = JSON.parse(innerStr);
-          accumulated += innerParsed.choices?.[0]?.delta?.content || "";
-        } else {
-          accumulated += parsed.content;
-        }
-      }
-    } catch (e) {
-      // Bỏ qua dòng bị lỗi parse
-    }
-  }
-  return accumulated || content;
-};
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 // BKAV HaiHS : Ham trich xuat text token tu payload SSE - start
 const extractTextToken = (parsed) => {
   if (!parsed) return "";
-  if (parsed.content && typeof parsed.content === "string") {
-    // Kịch bản A: Backend bị bọc kép dạng { content: 'data: {"choices":...}' }
-    if (parsed.content.startsWith("data: ")) {
-      try {
-        const innerStr = parsed.content.replace("data: ", "").trim();
-        const innerParsed = JSON.parse(innerStr);
-        return innerParsed.choices?.[0]?.delta?.content || "";
-      } catch (e) {
-        return parsed.content;
-      }
+
+  // 1. Kịch bản C: Cấu hình thô OpenAI / Groq SDK
+  const sdkContent = parsed.choices?.[0]?.delta?.content;
+  if (sdkContent !== undefined) return sdkContent;
+
+  // Nếu không có content dạng string thì không xử lý Kịch bản A & B nữa
+  if (typeof parsed.content !== "string") return "";
+
+  // 2. Kịch bản A: Bị bọc kép dạng "data: { ... }"
+  if (parsed.content.startsWith("data: ")) {
+    try {
+      const innerStr = parsed.content.slice(6).trim(); // Dùng slice(6) thay vì replace("data: ", "")
+      const innerParsed = JSON.parse(innerStr);
+      return innerParsed.choices?.[0]?.delta?.content ?? parsed.content;
+    } catch {
+      return parsed.content;
     }
-    // Kịch bản B: Backend trả chuẩn LangChain { content: "từ_chữ" }
-    return parsed.content;
   }
-  // Kịch bản C: Backend bắn thẳng cấu hình thô OpenAI/Groq SDK
-  if (parsed.choices?.[0]?.delta?.content !== undefined) {
-    return parsed.choices[0].delta.content;
-  }
-  return "";
+
+  // 3. Kịch bản B: Chuẩn LangChain { content: "từ_chữ" }
+  return parsed.content;
 };
 // BKAV HaiHS : Ham trich xuat text token tu payload SSE - end
+
+// BKAV HaiHS : Hàm phụ phân tích và xử lý từng dòng dữ liệu từ luồng SSE - start
+const processSSELine = (line, callbacks) => {
+  const cleanedLine = line.trim();
+  if (!cleanedLine || !cleanedLine.startsWith("data: ")) return false;
+
+  const dataStr = cleanedLine.replace("data: ", "").trim();
+  if (dataStr.startsWith("[DONE]")) {
+    callbacks.onDone(dataStr);
+    return true; // Đánh dấu kết thúc stream
+  }
+
+  try {
+    const parsed = JSON.parse(dataStr);
+    if (parsed.sync === true) {
+      callbacks.onSync(parsed);
+    } else {
+      const textToken = extractTextToken(parsed);
+      if (textToken) {
+        callbacks.onToken(textToken);
+      }
+    }
+  } catch (e) {
+    // Bỏ qua lỗi cú pháp đối với các dòng chưa nhận đủ dữ liệu (chunked)
+  }
+  return false;
+};
+// BKAV HaiHS : Hàm phụ phân tích và xử lý từng dòng dữ liệu từ luồng SSE - end
 
 // BKAV HaiHS : Custom Hook quản lý logic Chat Stream & Hội thoại - start
 export const useChatStream = (initialActiveId = "new-chat") => {
@@ -97,6 +90,17 @@ export const useChatStream = (initialActiveId = "new-chat") => {
     activeIdRef.current = activeId;
   }, [activeId]);
   // BKAV HaiHS : Luu tru ID hien tai bang Ref de tranh stale closure khi bat dong bo - end
+
+  // BKAV HaiHS : Hủy kết nối stream dang dở khi hook bị unmount - start
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
+  // BKAV HaiHS : Hủy kết nối stream dang dở khi hook bị unmount - end
 
   // 1. Hàm lấy danh sách hội thoại (Cuộn vô hạn)
   const fetchConversations = useCallback(
@@ -132,12 +136,14 @@ export const useChatStream = (initialActiveId = "new-chat") => {
   }, []);
 
   // 2. Hàm chuyển hội thoại & lấy tin nhắn cũ
+
   // BKAV HaiHS : Chuyen doi phong chat va tu dong ket noi lai neu dang streaming - start
   const selectConversation = async (id) => {
     if (isStreaming) {
       // BKAV HaiHS : Chi ngat ket noi doc SSE o FE, giu nguyen luong chay o BE - start
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+        abortControllerRef.current = null; // BKAV HaiHS : Gán về null để giải phóng bộ nhớ
       }
       setIsStreaming(false);
       setIsWaitingSkeleton(false);
@@ -159,12 +165,7 @@ export const useChatStream = (initialActiveId = "new-chat") => {
       const oldMessages =
         res?.data?.messages || res?.messages || (Array.isArray(res) ? res : []);
 
-      const cleanedMessages = oldMessages.map((msg) => ({
-        ...msg,
-        content:
-          msg.role === "assistant" ? cleanSSEContent(msg.content) : msg.content,
-      }));
-      setMessages(cleanedMessages);
+      setMessages(oldMessages);
 
       const isRoomStreaming =
         res?.data?.isStreaming || res?.isStreaming || false;
@@ -191,8 +192,7 @@ export const useChatStream = (initialActiveId = "new-chat") => {
 
     try {
       const token = getAccessToken();
-      const baseUrl =
-        import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+      const baseUrl = API_BASE_URL;
       // BKAV HaiHS : Goi endpoint /abort de phat tin hieu ABORT cheo may chu qua Redis Pub/Sub - start
       await fetch(`${baseUrl}/conversations/${activeId}/abort`, {
         method: "POST",
@@ -206,6 +206,7 @@ export const useChatStream = (initialActiveId = "new-chat") => {
       // Fallback: Nếu lỗi API /abort thì hủy ngay lập tức để tránh đơ UI
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+        abortControllerRef.current = null;
       }
       setIsStreaming(false);
       setIsStopping(false);
@@ -213,7 +214,7 @@ export const useChatStream = (initialActiveId = "new-chat") => {
   };
   // BKAV HaiHS : Dung luong AI va bao cho backend biet de ngat ket noi cheo may chu - end
 
-  // 4. CORE CHAT: Hàm gửi câu hỏi & Đọc dữ liệu Stream SSE phẳng chuẩn chỉnh
+  // BKAV HaiHS : Hàm gửi câu hỏi & Đọc dữ liệu Stream SSE phẳng chuẩn chỉnh - start
   const sendMessage = async (prompt, modelName) => {
     if (!prompt.trim() || isStreaming) return;
 
@@ -271,8 +272,7 @@ export const useChatStream = (initialActiveId = "new-chat") => {
     let aiMsgId = null;
 
     try {
-      const baseUrl =
-        import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+      const baseUrl = API_BASE_URL;
       const response = await fetch(
         `${baseUrl}/conversations/${currentId}/chat`,
         {
@@ -312,7 +312,7 @@ export const useChatStream = (initialActiveId = "new-chat") => {
       setIsWaitingSkeleton(false);
 
       let accumulatedText = "";
-      let streamBuffer = ""; // BIẾN CỨU CÁNH: Bộ đệm chắp vá các mảnh dữ liệu bị cắt nửa dòng
+      let streamBuffer = "";
       let isDone = false;
 
       while (true) {
@@ -327,41 +327,32 @@ export const useChatStream = (initialActiveId = "new-chat") => {
         streamBuffer = lines.pop() || "";
 
         for (const line of lines) {
-          const cleanedLine = line.trim();
-          if (!cleanedLine || !cleanedLine.startsWith("data: ")) continue;
-
-          const dataStr = cleanedLine.replace("data: ", "").trim();
-          if (dataStr.startsWith("[DONE]")) {
-            try {
-              const jsonPart = dataStr.replace("[DONE]", "").trim();
-              if (jsonPart) {
-                const parsedDone = JSON.parse(jsonPart);
-                setMessages((prev) =>
-                  prev.map((msg) => {
-                    if (msg.id === aiMsgId) {
-                      const updated = { ...msg };
-                      if (parsedDone.usage) updated.usage = parsedDone.usage;
-                      if (parsedDone.responseTime) updated.responseTime = parsedDone.responseTime;
-                      if (parsedDone.isStopped !== undefined) updated.isStopped = parsedDone.isStopped;
-                      return updated;
-                    }
-                    return msg;
-                  })
-                );
+          isDone = processSSELine(line, {
+            onDone: (dataStr) => {
+              try {
+                const jsonPart = dataStr.replace("[DONE]", "").trim();
+                if (jsonPart) {
+                  const parsedDone = JSON.parse(jsonPart);
+                  setMessages((prev) =>
+                    prev.map((msg) => {
+                      if (msg.id === aiMsgId) {
+                        const updated = { ...msg };
+                        if (parsedDone.usage) updated.usage = parsedDone.usage;
+                        if (parsedDone.responseTime)
+                          updated.responseTime = parsedDone.responseTime;
+                        if (parsedDone.isStopped !== undefined)
+                          updated.isStopped = parsedDone.isStopped;
+                        return updated;
+                      }
+                      return msg;
+                    }),
+                  );
+                }
+              } catch (e) {
+                console.error("Lỗi phân tích dữ liệu kết thúc từ DONE:", e);
               }
-            } catch (e) {
-              console.error("Lỗi phân tích dữ liệu kết thúc từ DONE:", e);
-            }
-            isDone = true;
-            break;
-          }
-
-          try {
-            const parsed = JSON.parse(dataStr);
-
-            // BKAV HaiHS : Xu ly su kien sync khi nhan lai lich su tu Backend - start
-            if (parsed.sync === true) {
-              // Sự kiện sync: Backend gửi toàn bộ lịch sử trong một khối duy nhất
+            },
+            onSync: (parsed) => {
               if (parsed.content) {
                 accumulatedText = parsed.content;
                 setMessages((prev) =>
@@ -372,14 +363,8 @@ export const useChatStream = (initialActiveId = "new-chat") => {
                   ),
                 );
               }
-              continue;
-            }
-            // BKAV HaiHS : Xu ly su kien sync khi nhan lai lich su tu Backend - end
-
-            const textToken = extractTextToken(parsed);
-
-            // Tiến hành cập nhật thời gian thực lên màn hình bong bóng chat
-            if (textToken) {
+            },
+            onToken: (textToken) => {
               accumulatedText += textToken;
               setMessages((prev) =>
                 prev.map((msg) =>
@@ -388,12 +373,11 @@ export const useChatStream = (initialActiveId = "new-chat") => {
                     : msg,
                 ),
               );
-            }
-          } catch (e) {
-            // Im lặng bỏ qua lỗi parse nếu dòng dữ liệu chưa hoàn chỉnh hẳn
-          }
+            },
+          });
+          if (isDone) break;
         }
-        if (isDone) break; // BKAV HaiHS : Thoat ngay while loop de khong bi chan tai reader.read() sau khi nhan DONE
+        if (isDone) break; // Thoat ngay while loop de khong bi chan tai reader.read() sau khi nhan DONE
       }
 
       // STREAM KẾT THÚC THÀNH CÔNG
@@ -401,12 +385,12 @@ export const useChatStream = (initialActiveId = "new-chat") => {
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === aiMsgId
-            ? { 
-                ...msg, 
-                isStreaming: false, 
-                modelName, 
+            ? {
+                ...msg,
+                isStreaming: false,
+                modelName,
                 responseTime: msg.responseTime || elapsed,
-                isStopped: msg.isStopped !== undefined ? msg.isStopped : false
+                isStopped: msg.isStopped !== undefined ? msg.isStopped : false,
               }
             : msg,
         ),
@@ -445,9 +429,55 @@ export const useChatStream = (initialActiveId = "new-chat") => {
       }
       // BKAV HaiHS : Chi reset trang thai neu room hien tai van dang active - end
       if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
+    }
+  };
+  // BKAV HaiHS : Hàm gửi câu hỏi & Đọc dữ liệu Stream SSE phẳng chuẩn chỉnh - end
+
+  // BKAV HaiHS : Helper xử lý lỗi Response HTTP
+  const handleStreamError = async (response) => {
+    if (response.status === 429) {
+      const errData = await response.json().catch(() => ({}));
+      const message =
+        errData.message ||
+        "Bạn đã vượt giới hạn kết nối lại. Vui lòng thử lại!";
+      window.dispatchEvent(
+        new CustomEvent("show-toast", { detail: { message, type: "error" } }),
+      );
+      throw new Error(message);
+    }
+    throw new Error("Đường truyền API Chat Reconnect thất bại");
+  };
+
+  // BKAV HaiHS : Thuc hien dang ky lai luong stream theo quy trinh 3 buoc Subscribe-Query-Flush - start
+  // Helper 1: Xử lý đọc và phân tách dòng SSE (Tách vòng lặp ra khỏi hàm chính)
+  const processStreamReader = async (reader, onLine) => {
+    const decoder = new TextDecoder("utf-8");
+    let streamBuffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      streamBuffer += decoder.decode(value, { stream: true });
+      const lines = streamBuffer.split("\n");
+      streamBuffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const isDone = onLine(line);
+        if (isDone) return; // Thoát ngay khi gặp DONE mà không cần labelled break phức tạp
+      }
+    }
+  };
+
+  // Helper 2: Parse JSON an toàn không gây lồng try-catch
+  const safeParseJSON = (str) => {
+    try {
+      return JSON.parse(str);
+    } catch (e) {
+      console.error("Lỗi parse JSON SSE:", e);
+      return null;
     }
   };
 
@@ -457,183 +487,119 @@ export const useChatStream = (initialActiveId = "new-chat") => {
     const aiMsgId = existingMsgId || Date.now() + 1;
     const startTime = Date.now();
 
-    if (existingMsgId) {
-      // BKAV HaiHS : Neu da co tin nhan trong DB, gan no ve isStreaming = true - start
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === existingMsgId ? { ...msg, isStreaming: true } : msg,
-        ),
-      );
-      // BKAV HaiHS : Neu da co tin nhan trong DB, gan no ve isStreaming = true - end
-    } else {
-      setMessages((prev) => {
-        const lastMsg = prev[prev.length - 1];
-        if (lastMsg && lastMsg.role === "assistant") return prev;
-        return [
-          ...prev,
-          { id: aiMsgId, role: "assistant", content: "", isStreaming: true },
-        ];
-      });
-    }
-
+    // 1. Khởi tạo UI tin nhắn
+    initMessageState(existingMsgId, aiMsgId);
     abortControllerRef.current = new AbortController();
-    const token = getAccessToken();
 
     try {
-      const baseUrl =
-        import.meta.env.VITE_API_URL || "http://localhost:3000/api";
-      // BKAV HaiHS : Gui tham so ?resume=true de Backend xu ly theo quy trinh 3 buoc - start
       const response = await fetch(
-        `${baseUrl}/conversations/${currentId}/chat?resume=true`,
+        `${API_BASE_URL}/conversations/${currentId}/chat?resume=true`,
         {
           method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${getAccessToken()}` },
           signal: abortControllerRef.current.signal,
         },
       );
-      // BKAV HaiHS : Gui tham so ?resume=true de Backend xu ly theo quy trinh 3 buoc - end
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          const errData = await response.json().catch(() => ({}));
-          const message =
-            errData.message ||
-            "Bạn đã vượt giới hạn kết nối lại. Vui lòng thử lại!";
-          window.dispatchEvent(
-            new CustomEvent("show-toast", {
-              detail: { message, type: "error" },
-            }),
-          );
-          throw new Error(message);
-        }
-        throw new Error("Đường truyền API Chat Reconnect thất bại");
-      }
+      if (!response.ok) await handleStreamError(response);
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-
+      // 2. Tiến hành đọc stream bằng Helper
       let accumulatedText = "";
-      let streamBuffer = "";
-      let isDone = false;
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done || isDone) break;
-
-        streamBuffer += decoder.decode(value, { stream: true });
-        const lines = streamBuffer.split("\n");
-        streamBuffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const cleanedLine = line.trim();
-          if (!cleanedLine || !cleanedLine.startsWith("data: ")) continue;
-
-          const dataStr = cleanedLine.replace("data: ", "").trim();
-          if (dataStr.startsWith("[DONE]")) {
-            try {
-              const jsonPart = dataStr.replace("[DONE]", "").trim();
-              if (jsonPart) {
-                const parsedDone = JSON.parse(jsonPart);
-                setMessages((prev) =>
-                  prev.map((msg) => {
-                    if (msg.id === aiMsgId) {
-                      const updated = { ...msg };
-                      if (parsedDone.usage) updated.usage = parsedDone.usage;
-                      if (parsedDone.responseTime) updated.responseTime = parsedDone.responseTime;
-                      if (parsedDone.isStopped !== undefined) updated.isStopped = parsedDone.isStopped;
-                      return updated;
-                    }
-                    return msg;
-                  })
-                );
-              }
-            } catch (e) {
-              console.error("Lỗi phân tích dữ liệu kết thúc từ DONE:", e);
-            }
-            isDone = true;
-            break;
-          }
-
-          try {
-            const parsed = JSON.parse(dataStr);
-
-            // BKAV HaiHS : Xu ly su kien sync: thay the toan bo lich su bang khoi van ban nhan duoc - start
-            if (parsed.sync === true) {
-              if (parsed.content) {
-                accumulatedText = parsed.content;
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === aiMsgId
-                      ? { ...msg, content: accumulatedText }
-                      : msg,
-                  ),
-                );
-              }
-              continue;
-            }
-            // BKAV HaiHS : Xu ly su kien sync: thay the toan bo lich su bang khoi van ban nhan duoc - end
-
-            // BKAV HaiHS : Xu ly token live nhan tiep sau khi da dong bo lich su - start
-            const textToken = extractTextToken(parsed);
-            if (textToken) {
-              accumulatedText += textToken;
+      await processStreamReader(response.body.getReader(), (line) =>
+        processSSELine(line, {
+          onDone: (dataStr) => {
+            const jsonPart = dataStr.replace("[DONE]", "").trim();
+            const parsed = jsonPart ? safeParseJSON(jsonPart) : null;
+            if (parsed) {
               setMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === aiMsgId
-                    ? { ...msg, content: accumulatedText }
-                    : msg,
-                ),
+                prev.map((m) => (m.id === aiMsgId ? { ...m, ...parsed } : m)),
               );
             }
-            // BKAV HaiHS : Xu ly token live nhan tiep sau khi da dong bo lich su - end
-          } catch (e) {
-            // Im lang bo qua dong loi parse thong tin
-          }
-        }
-        if (isDone) break; // BKAV HaiHS : Thoat ngay while loop de khong bi chan tai reader.read() sau khi nhan DONE
-      }
+          },
+          onSync: (parsed) => {
+            if (!parsed.content) return;
+            accumulatedText = parsed.content;
+            updateMsgContent(aiMsgId, accumulatedText);
+          },
+          onToken: (textToken) => {
+            accumulatedText += textToken;
+            updateMsgContent(aiMsgId, accumulatedText);
+          },
+        }),
+      );
 
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1) + "s";
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === aiMsgId
-            ? { 
-                ...msg, 
-                isStreaming: false, 
-                responseTime: msg.responseTime || elapsed,
-                isStopped: msg.isStopped !== undefined ? msg.isStopped : false
-              }
-            : msg,
-        ),
-      );
+      // 3. Hoàn tất stream thành công
+      finishMessageState(aiMsgId, startTime);
     } catch (err) {
-      if (err.name === "AbortError") {
-        console.log("Người dùng chủ động nhấn dừng Stream.");
-      } else {
-        console.error("Lỗi trong quá trình kết nối lại Stream:", err);
-      }
-      // BKAV HaiHS : Dam bao set isStreaming cua tin nhan assistant cuoi cung thanh false khi loi hoac dung - start
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === aiMsgId ? { ...msg, isStreaming: false } : msg,
-        ),
-      );
-      // BKAV HaiHS : Dam bao set isStreaming cua tin nhan assistant cuoi cung thanh false khi loi hoac dung - end
+      handleStreamException(err);
     } finally {
-      // BKAV HaiHS : Chi reset trang thai neu room hien tai van dang active - start
-      if (activeIdRef.current === currentId) {
-        setIsStreaming(false);
-        setIsStopping(false);
-        setIsWaitingSkeleton(false);
-      }
-      // BKAV HaiHS : Chi reset trang thai neu room hien tai van dang active - end
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
+      cleanupStreamState(currentId, aiMsgId);
     }
+  };
+
+  // --- Các sub-helpers hỗ trợ để code chính cực kỳ sạch ---
+
+  const initMessageState = (existingMsgId, aiMsgId) => {
+    setMessages((prev) => {
+      if (existingMsgId) {
+        return prev.map((m) =>
+          m.id === existingMsgId ? { ...m, isStreaming: true } : m,
+        );
+      }
+      const lastMsg = prev[prev.length - 1];
+      if (lastMsg?.role === "assistant") return prev;
+      return [
+        ...prev,
+        { id: aiMsgId, role: "assistant", content: "", isStreaming: true },
+      ];
+    });
+  };
+
+  const finishMessageState = (aiMsgId, startTime) => {
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1) + "s";
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === aiMsgId
+          ? {
+              ...msg,
+              isStreaming: false,
+              responseTime: msg.responseTime || elapsed,
+              isStopped: msg.isStopped ?? false,
+            }
+          : msg,
+      ),
+    );
+  };
+
+  const handleStreamException = (err) => {
+    if (err.name === "AbortError") {
+      console.log("Người dùng chủ động nhấn dừng Stream.");
+      return;
+    }
+    console.error("Lỗi trong quá trình kết nối lại Stream:", err);
+  };
+
+  const cleanupStreamState = (currentId, aiMsgId) => {
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === aiMsgId ? { ...msg, isStreaming: false } : msg,
+      ),
+    );
+
+    if (activeIdRef.current === currentId) {
+      setIsStreaming(false);
+      setIsStopping(false);
+      setIsWaitingSkeleton(false);
+    }
+    abortControllerRef.current = null;
+  };
+  // BKAV HaiHS : Thuc hien dang ky lai luong stream theo quy trinh 3 buoc Subscribe-Query-Flush - end
+
+  // Helper cập nhật text cho tin nhắn gọn hơn
+  const updateMsgContent = (msgId, content) => {
+    setMessages((prev) =>
+      prev.map((msg) => (msg.id === msgId ? { ...msg, content } : msg)),
+    );
   };
   // BKAV HaiHS : Thuc hien dang ky lai luong stream theo quy trinh 3 buoc Subscribe-Query-Flush - end
 

@@ -85,8 +85,10 @@ function MainAppContent() {
           path="/chat"
           element={
             <ChatWindow
+              activeConversationId={chatProps.activeId}
               messages={chatProps.messages}
               isStreaming={chatProps.isStreaming}
+              isStopping={chatProps.isStopping}
               isWaitingSkeleton={chatProps.isWaitingSkeleton}
               sendMessage={chatProps.sendMessage}
               handleStopStream={chatProps.handleStopStream}
