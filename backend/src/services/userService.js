@@ -17,7 +17,6 @@ class UserService {
     }
 
     const tempPassword = crypto.randomBytes(4).toString("hex");
-    console.log(tempPassword); // tạm để để log vào tk email giả
 
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 

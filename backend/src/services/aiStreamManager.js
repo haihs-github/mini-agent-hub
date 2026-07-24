@@ -409,7 +409,9 @@ class AIStreamManager {
     if (unsubscribeControl) {
       try {
         await unsubscribeControl();
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[AIStreamManager] Lỗi unsubscribeControl khi dọn dẹp stream (${streamId}): ${e.message}`);
+      }
     }
     await redisStreamService.deleteStream(streamId);
     streams.delete(streamId);
