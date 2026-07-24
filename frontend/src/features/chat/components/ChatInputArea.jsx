@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { FiSend, FiPaperclip, FiSquare, FiX } from "react-icons/fi";
 import { useToast } from "@/components/Toast";
-import { useLanguage } from "@/context/LanguageContext"; // BKAV HaiHS: Import hook ngôn ngữ
+import { useLanguage } from "@/context/LanguageContext";
 
 // BKAV HaiHS : Component khu vực nhập liệu và gửi câu hỏi trong workspace chat, hỗ trợ đính kèm ảnh và trạng thái đang trả lời - start
 const ChatInputArea = ({
@@ -13,9 +13,9 @@ const ChatInputArea = ({
   setAttachedImages,
 }) => {
   const { showToast } = useToast();
-  const { t } = useLanguage(); // BKAV HaiHS: Khai báo hàm dịch thuật
+  const { t } = useLanguage();
   const [prompt, setPrompt] = useState("");
-  const fileInputRef = React.useRef(null);
+  const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
   // BKAV HaiHS: Tự động co giãn chiều cao của textarea theo nội dung nhập - start
@@ -23,21 +23,31 @@ const ChatInputArea = ({
     const textarea = textareaRef.current;
     if (!textarea) return;
 
-    // Reset chiều cao về auto để tính toán scrollHeight chính xác khi xóa chữ
     textarea.style.height = "auto";
-    // Đặt chiều cao mới dựa trên scrollHeight (không vượt quá max-height cấu hình qua CSS)
     textarea.style.height = `${textarea.scrollHeight}px`;
   }, [prompt]);
   // BKAV HaiHS: Tự động co giãn chiều cao của textarea theo nội dung nhập - end
 
+  // BKAV HaiHS : Tự động thu hồi và giải phóng Object URL xem trước ảnh khi component bị hủy - start
+  useEffect(() => {
+    return () => {
+      attachedImages.forEach((img) => {
+        if (img.preview) {
+          URL.revokeObjectURL(img.preview);
+        }
+      });
+    };
+  }, [attachedImages]);
+  // BKAV HaiHS : Tự động thu hồi và giải phóng Object URL xem trước ảnh khi component bị hủy - end
+
+  // BKAV HaiHS : Xử lý khi người dùng chọn hình ảnh - start
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
 
     files.forEach((file) => {
       if (!file.type.startsWith("image/")) {
         showToast(
-          t("toast_image_only") ||
-            "Hệ thống chỉ hỗ trợ đính kèm tệp tin hình ảnh!",
+          t("toast_image_only") || "toast_image_only",
           "warning",
         );
         return;
@@ -51,12 +61,16 @@ const ChatInputArea = ({
 
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+  // BKAV HaiHS : Xử lý khi người dùng chọn hình ảnh - end
 
+  // BKAV HaiHS : Xử lý khi người dùng xóa hình ảnh xem trước - start
   const removeImage = (indexToRemove) => {
     URL.revokeObjectURL(attachedImages[indexToRemove].preview);
     setAttachedImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
+  // BKAV HaiHS : Xử lý khi người dùng xóa hình ảnh xem trước - end
 
+  // BKAV HaiHS : Handler submit biểu mẫu gửi câu hỏi - start
   const handleSubmit = (e) => {
     e.preventDefault();
     if (isStreaming) {
@@ -69,29 +83,24 @@ const ChatInputArea = ({
     onSendMessage(prompt.trim());
     setPrompt("");
   };
+  // BKAV HaiHS : Handler submit biểu mẫu gửi câu hỏi - end
 
+  // BKAV HaiHS : Bẫy phím Enter để gửi câu hỏi thay vì xuống dòng - start
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
     }
   };
+  // BKAV HaiHS : Bẫy phím Enter để gửi câu hỏi thay vì xuống dòng - end
 
   return (
     <div className="p-4 bg-gray-50 dark:bg-[#0b0f19] border-t border-gray-200 dark:border-[#1e293b]/60 shrink-0 transition-colors duration-300">
-      {/* BKAV HaiHS : Custom style cho thanh cuộn của textarea nhập câu hỏi */}
-      <style>{`
-        .cyber-scrollbar::-webkit-scrollbar { width: 4px; }
-        .cyber-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .cyber-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
-        .dark .cyber-scrollbar::-webkit-scrollbar-thumb { background: #232d42; }
-        .cyber-scrollbar::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
-      `}</style>
       <form
         onSubmit={handleSubmit}
         className="max-w-4xl mx-auto relative bg-white border border-gray-200 dark:bg-[#161b26] dark:border-[#232d42] rounded-2xl focus-within:border-blue-500/50 transition-all shadow-2xl overflow-hidden px-4 py-3"
       >
-        {/* 1. KHAY HIỂN THỊ XEM TRƯỚC ẢNH ĐÍNH KÈM */}
+        {/* Khay hiển thị xem trước ảnh đính kèm */}
         {attachedImages.length > 0 && (
           <div className="flex flex-wrap gap-2.5 pb-3 border-b border-gray-100 dark:border-[#232d42]/60 mb-2 animate-fade-in transition-colors">
             {attachedImages.map((imgObj, idx) => (
@@ -116,13 +125,13 @@ const ChatInputArea = ({
           </div>
         )}
 
-        {/* 2. Ô NHẬP TEXTAREA + NÚT CHỨC NĂNG CHÂN TRANG */}
+        {/* Ô nhập textarea và nút chức năng chân trang */}
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="p-2 rounded-xl text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#1e293b] transition-all cursor-pointer"
-            title={t("attach_image") || "Đính kèm hình ảnh"}
+            title={t("attach_image") || "attach_image"}
           >
             <FiPaperclip size={18} />
           </button>
@@ -142,7 +151,7 @@ const ChatInputArea = ({
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              t("chat_placeholder") || "Nhập nội dung câu hỏi tại đây..."
+              t("chat_placeholder") || "chat_placeholder"
             }
             className="cyber-scrollbar flex-1 bg-transparent border-0 focus:outline-none resize-none text-sm text-gray-900 dark:text-gray-100 max-h-36 placeholder-gray-400 dark:placeholder-gray-600 leading-6 py-1.5 transition-colors overflow-y-auto"
             style={{ height: "auto" }}
@@ -172,10 +181,10 @@ const ChatInputArea = ({
           </button>
         </div>
       </form>
-      {/* BKAV HaiHS: Sửa màu chữ cảnh báo cuối trang */}
+      
+      {/* Cảnh báo an toàn dữ liệu cuối trang */}
       <div className="text-center text-[10px] text-gray-500 dark:text-gray-600 tracking-wide mt-2 transition-colors">
-        {t("ai_disclaimer") ||
-          "Hệ thống trí tuệ nhân tạo có thể đưa ra câu trả lời chưa chính xác, vui lòng kiểm tra lại nguồn dữ liệu."}
+        {t("ai_disclaimer") || "ai_disclaimer"}
       </div>
     </div>
   );

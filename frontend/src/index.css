@@ -22,3 +22,22 @@ input::-ms-clear {
 .animate-toast-slide-in {
   animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* BKAV HaiHS : Custom style cho thanh cuộn của textarea nhập câu hỏi - start */
+.cyber-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.cyber-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cyber-scrollbar::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 99px;
+}
+.dark .cyber-scrollbar::-webkit-scrollbar-thumb {
+  background: #232d42;
+}
+.cyber-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6;
+}
+/* BKAV HaiHS : Custom style cho thanh cuộn của textarea nhập câu hỏi - end */
