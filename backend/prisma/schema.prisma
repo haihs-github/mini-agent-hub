@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            Int            @id @default(autoincrement())
+  fullname      String
+  email         String         @unique
+  password      String
+  permissions   String[]       @default(["CHAT", "CONV_C", "CONV_R", "CONV_U", "CONV_D"])
+  address       String?
+  phone         String?
+  conversations Conversation[]
+  refreshTokens RefreshToken[]
+  groups        Group[]        @relation("UserGroups")
+}
+
+model Group {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  permissions String[] @default([])
+  users       User[]   @relation("UserGroups")
+}
+
+model Conversation {
+  id        Int       @id @default(autoincrement())
+  title     String    @default("Cuộc hội thoại mới")
+  userId    Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+}
+
+model Message {
+  id               Int          @id @default(autoincrement())
+  role             String
+  content          String
+  modelName        String?
+  conversationId   Int
+  createdAt        DateTime     @default(now())
+  completionTokens Int?
+  promptTokens     Int?
+  totalTokens      Int?
+  responseTime     String?
+  isStopped        Boolean?     @default(false)
+  attachments      Attachment[]
+  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Attachment {
+  id        Int      @id @default(autoincrement())
+  messageId Int
+  createdAt DateTime @default(now())
+  filePath  String
+  fileType  String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

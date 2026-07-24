@@ -1,0 +1,107 @@
+const express = require("express");
+const router = express.Router();
+const conversationController = require("../controllers/conversationController");
+const authMiddleware = require("../middlewares/authMiddleware");
+const permissionMiddleware = require("../middlewares/permissionMiddleware");
+const upload = require("../middlewares/uploadMiddleware");
+const {
+  chatLimiter,
+  heavyQueryLimiter,
+  writeDbLimiter,
+} = require("../middlewares/rateLimitMiddleware");
+
+// BKAV HaiHS : API Tạo phòng chat mới (CONV_C) - start
+router.post(
+  "/",
+  authMiddleware,
+  permissionMiddleware("CONV_C"),
+  writeDbLimiter,
+  conversationController.createConversation,
+);
+// BKAV HaiHS : API Tạo phòng chat mới (CONV_C) - end
+
+// BKAV HaiHS : API Lấy toàn bộ danh sách phòng chat của chính mình (CONV_R) - start
+router.get(
+  "/",
+  authMiddleware,
+  permissionMiddleware("CONV_R"),
+  heavyQueryLimiter,
+  conversationController.getMyConversations,
+);
+// BKAV HaiHS : API Lấy toàn bộ danh sách phòng chat của chính mình (CONV_R) - end
+
+// BKAV HaiHS : API Lấy chi tiết phòng chat kèm tin nhắn cũ của chính mình (CONV_R) - start
+router.get(
+  "/:id",
+  authMiddleware,
+  permissionMiddleware("CONV_R"),
+  conversationController.getConversationDetail,
+);
+// BKAV HaiHS : API Lấy chi tiết phòng chat kèm tin nhắn cũ của chính mình (CONV_R) - start
+
+// BKAV HaiHS : API Cập nhật tiêu đề phòng chat của chính mình (CONV_U) - start
+router.put(
+  "/:id",
+  authMiddleware,
+  permissionMiddleware("CONV_U"),
+  writeDbLimiter,
+  conversationController.updateTitle,
+);
+// BKAV HaiHS : API Cập nhật tiêu đề phòng chat của chính mình (CONV_U) - end
+
+// BKAV HaiHS : Xóa toàn bộ lịch sử chat - start
+router.delete(
+  "/",
+  authMiddleware,
+  permissionMiddleware("CONV_D"),
+  writeDbLimiter,
+  conversationController.clearAllConversations,
+);
+// BKAV HaiHS : Xóa toàn bộ lịch sử chat - end
+
+// BKAV HaiHS : API Xóa phòng chat của chính mình (CONV_D) - start
+router.delete(
+  "/:id",
+  authMiddleware,
+  permissionMiddleware("CONV_D"),
+  writeDbLimiter,
+  conversationController.deleteConversation,
+);
+// BKAV HaiHS : API Xóa phòng chat của chính mình (CONV_D) - end
+
+// BKAV HaiHS : API Xu ly Chat va phan phoi stream - start
+router.post(
+  "/:id/chat",
+  authMiddleware,
+  permissionMiddleware("CHAT"),
+  chatLimiter,
+  upload.array("images", 5),
+  conversationController.handleChat,
+);
+
+router.get(
+  "/:id/chat",
+  authMiddleware,
+  permissionMiddleware("CHAT"),
+  chatLimiter,
+  conversationController.handleStreamReconnect,
+);
+
+router.post(
+  "/:id/stop",
+  authMiddleware,
+  permissionMiddleware("CHAT"),
+  conversationController.handleStop,
+);
+
+// BKAV HaiHS : API Huy bo luong AI cheo may chu qua Redis Pub/Sub - start
+router.post(
+  "/:id/abort",
+  authMiddleware,
+  permissionMiddleware("CHAT"),
+  conversationController.handleAbort,
+);
+// BKAV HaiHS : API Huy bo luong AI cheo may chu qua Redis Pub/Sub - end
+// BKAV HaiHS : API Xu ly Chat va phan phoi stream - end
+
+module.exports = router;
