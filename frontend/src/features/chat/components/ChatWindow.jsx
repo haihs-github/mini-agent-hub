@@ -30,7 +30,7 @@ const ChatWindow = ({
         if (res?.data) {
           setModels(res.data);
           // Chọn model đầu tiên làm mặc định nếu có danh sách và model cũ không tồn tại trong danh sách mới
-          if (res.data.length > 0) {
+          if (Array.isArray(res.data) && res.data.length > 0) {
             const hasDefault = res.data.some((m) => m.id === "qwen/qwen3.6-27b");
             if (!hasDefault) {
               setSelectedModel(res.data[0].id);
@@ -45,9 +45,16 @@ const ChatWindow = ({
   }, []);
   // BKAV HaiHS : Tải danh sách model AI hoạt động từ Backend - end
 
+  // BKAV HaiHS : Handler trung chuyển tin nhắn kèm theo model đang chọn - start
+  const handleSendMessage = (prompt, images) => {
+    sendMessage(prompt, selectedModel, images);
+  };
+  // BKAV HaiHS : Handler trung chuyển tin nhắn kèm theo model đang chọn - end
+
   return (
-    /* BKAV HaiHS: Đồng bộ màu nền của toàn bộ vùng ChatWindow theo theme */
     <div className="w-full h-full flex flex-col overflow-hidden bg-gray-50 dark:bg-[#0b0f19] transition-colors duration-300">
+      {/* Đồng bộ màu nền theo theme */}
+
       {/* 1. Thanh đầu trang chọn model AI */}
       <ChatHeader
         selectedModel={selectedModel}
@@ -68,9 +75,7 @@ const ChatWindow = ({
 
       {/* 3. Ô nhập liệu đa năng */}
       <ChatInputArea
-        onSendMessage={(prompt, images) =>
-          sendMessage(prompt, selectedModel, images)
-        }
+        onSendMessage={handleSendMessage}
         isStreaming={isStreaming}
         isStopping={isStopping}
         onStopStream={handleStopStream}
