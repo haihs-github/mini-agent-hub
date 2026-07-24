@@ -9,7 +9,8 @@ import {
 } from "@/features/groups/groupApi";
 import ConfirmModal from "@/components/ConfirmModal";
 import { bulkAddUsersToGroupApi } from "@/features/users/userApi";
-import { useLanguage } from "@/context/LanguageContext"; // BKAV HaiHS: Import hook ngôn ngữ
+import { useLanguage } from "@/context/LanguageContext";
+import { useOutsideClick } from "@/hooks/useOutsideClick";
 
 // BKAV HaiHS: Component quản lý thành viên nhóm - start
 const GroupMembersModal = ({
@@ -23,7 +24,7 @@ const GroupMembersModal = ({
 
   const { permissions } = useAuth();
   const { showToast } = useToast();
-  const { t } = useLanguage(); // BKAV HaiHS: Khai báo hàm dịch thuật
+  const { t } = useLanguage();
   const userPermissions = permissions || [];
 
   const hasAddPermission = userPermissions.includes("GROUP_ADD_USER");
@@ -46,19 +47,14 @@ const GroupMembersModal = ({
   const [isProcessingAction, setIsProcessingAction] = useState(false);
   const [isConfirmCancelOpen, setIsConfirmCancelOpen] = useState(false);
 
-  const handleCloseWithCheck = () => {
-    if (pendingUsers.length > 0) {
-      setIsConfirmCancelOpen(true);
-    } else {
-      onClose();
-    }
-  };
-
-
-
   const searchRef = useRef(null);
   const searchTimeoutRef = useRef(null);
 
+  // BKAV HaiHS : Sử dụng useOutsideClick hook để tự động đóng dropdown tìm kiếm khi click ra ngoài - start
+  useOutsideClick(searchRef, () => setIsDropdownOpen(false));
+  // BKAV HaiHS : Sử dụng useOutsideClick hook để tự động đóng dropdown tìm kiếm khi click ra ngoài - end
+
+  // BKAV HaiHS : Tải danh sách thành viên hiện tại của nhóm từ API - start
   const loadCurrentMembers = useCallback(async () => {
     setIsLoadingMembers(true);
     try {
@@ -70,7 +66,9 @@ const GroupMembersModal = ({
       setIsLoadingMembers(false);
     }
   }, [groupId, showToast, t]);
+  // BKAV HaiHS : Tải danh sách thành viên hiện tại của nhóm từ API - end
 
+  // BKAV HaiHS : Khởi tạo lại toàn bộ state khi modal mở hoặc đổi nhóm - start
   useEffect(() => {
     loadCurrentMembers();
     setPendingUsers([]);
@@ -78,17 +76,9 @@ const GroupMembersModal = ({
     setLocalFilter("");
     setIsConfirmCancelOpen(false);
   }, [groupId, loadCurrentMembers, isOpen]);
+  // BKAV HaiHS : Khởi tạo lại toàn bộ state khi modal mở hoặc đổi nhóm - end
 
-  useEffect(() => {
-    const handleOutsideClick = (e) => {
-      if (searchRef.current && !searchRef.current.contains(e.target)) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
-
+  // BKAV HaiHS : Thực thi API tìm kiếm người dùng theo từ khóa và hỗ trợ phân trang - start
   const executeSearch = useCallback(
     async (keyword, pageNum = 1, isLoadMore = false) => {
       if (!keyword.trim()) {
@@ -119,7 +109,9 @@ const GroupMembersModal = ({
     },
     [],
   );
+  // BKAV HaiHS : Thực thi API tìm kiếm người dùng theo từ khóa và hỗ trợ phân trang - end
 
+  // BKAV HaiHS : Kích hoạt tìm kiếm tự động với kỹ thuật debounce 500ms - start
   useEffect(() => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     if (!searchKeyword.trim()) {
@@ -134,7 +126,19 @@ const GroupMembersModal = ({
 
     return () => clearTimeout(searchTimeoutRef.current);
   }, [searchKeyword, executeSearch]);
+  // BKAV HaiHS : Kích hoạt tìm kiếm tự động với kỹ thuật debounce 500ms - end
 
+  // BKAV HaiHS : Kiểm tra pending users trước khi đóng modal - start
+  const handleCloseWithCheck = () => {
+    if (pendingUsers.length > 0) {
+      setIsConfirmCancelOpen(true);
+    } else {
+      onClose();
+    }
+  };
+  // BKAV HaiHS : Kiểm tra pending users trước khi đóng modal - end
+
+  // BKAV HaiHS : Xử lý sự kiện cuộn danh sách kết quả tìm kiếm để tải thêm dữ liệu - start
   const handleSearchScroll = (e) => {
     const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
     if (
@@ -145,7 +149,9 @@ const GroupMembersModal = ({
       executeSearch(searchKeyword, searchPage + 1, true);
     }
   };
+  // BKAV HaiHS : Xử lý sự kiện cuộn danh sách kết quả tìm kiếm để tải thêm dữ liệu - end
 
+  // BKAV HaiHS : Chọn người dùng từ dropdown để đưa vào danh sách chờ thêm vào nhóm - start
   const handleSelectUserPending = (user) => {
     if (
       members.some((m) => m.id === user.id) ||
@@ -162,11 +168,15 @@ const GroupMembersModal = ({
     setSearchResults([]);
     setIsDropdownOpen(false);
   };
+  // BKAV HaiHS : Chọn người dùng từ dropdown để đưa vào danh sách chờ thêm vào nhóm - end
 
+  // BKAV HaiHS : Xóa người dùng khỏi danh sách chờ (pending chip) - start
   const handleRemovePendingChip = (userId) => {
     setPendingUsers((prev) => prev.filter((p) => p.id !== userId));
   };
+  // BKAV HaiHS : Xóa người dùng khỏi danh sách chờ (pending chip) - end
 
+  // BKAV HaiHS : Gọi API thêm hàng loạt người dùng vào nhóm - start
   const handleExecuteAddMembers = async () => {
     if (pendingUsers.length === 0 || isProcessingAction) return;
     setIsProcessingAction(true);
@@ -185,7 +195,9 @@ const GroupMembersModal = ({
       setIsProcessingAction(false);
     }
   };
+  // BKAV HaiHS : Gọi API thêm hàng loạt người dùng vào nhóm - end
 
+  // BKAV HaiHS : Mở hộp thoại xác nhận trước khi xóa thành viên khỏi nhóm - start
   const handleOpenRemoveConfirm = (user) => {
     if (!hasDeletePermission) {
       showToast(t("toast_no_delete_perm"), "warning");
@@ -194,7 +206,9 @@ const GroupMembersModal = ({
     setUserToRemove(user);
     setIsConfirmDeleteOpen(true);
   };
+  // BKAV HaiHS : Mở hộp thoại xác nhận trước khi xóa thành viên khỏi nhóm - end
 
+  // BKAV HaiHS : Gọi API xóa thành viên khỏi nhóm sau khi xác nhận - start
   const handleExecuteRemoveMember = async () => {
     if (!userToRemove || isProcessingAction) return;
     setIsProcessingAction(true);
@@ -211,7 +225,9 @@ const GroupMembersModal = ({
       setUserToRemove(null);
     }
   };
+  // BKAV HaiHS : Gọi API xóa thành viên khỏi nhóm sau khi xác nhận - end
 
+  // BKAV HaiHS : Lọc danh sách kết quả tìm kiếm để loại bỏ thành viên đã có trong nhóm hoặc đang chờ - start
   const filteredMembers = members.filter((m) => {
     const searchString = localFilter.toLowerCase();
     return (
@@ -220,21 +236,21 @@ const GroupMembersModal = ({
     );
   });
 
+  const filteredSearchResults = searchResults.filter(
+    (u) =>
+      !members.some((m) => m.id === u.id) &&
+      !pendingUsers.some((p) => p.id === u.id),
+  );
+  // BKAV HaiHS : Lọc danh sách kết quả tìm kiếm để loại bỏ thành viên đã có trong nhóm hoặc đang chờ - end
+
   return (
     <>
-      <style>{`
-        .cyber-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-        .cyber-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .cyber-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
-        .dark .cyber-scrollbar::-webkit-scrollbar-thumb { background: #232d42; }
-        .cyber-scrollbar::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
-      `}</style>
-
       <div
         onClick={(e) => e.target === e.currentTarget && handleCloseWithCheck()}
         className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm select-none animate-fade-in"
       >
         <div className="w-full max-w-md bg-white dark:bg-[#161b26] border border-gray-200 dark:border-[#232d42] rounded-2xl shadow-2xl flex flex-col relative overflow-hidden max-h-[90vh] transition-colors duration-300">
+          {/* header: tiêu đề và nút đóng */}
           <div className="px-6 py-5 border-b border-gray-200 dark:border-[#232d42] flex justify-between items-center bg-gray-50 dark:bg-[#111622]/30 rounded-t-2xl shrink-0 transition-colors">
             <h3 className="text-md font-bold text-gray-900 dark:text-white tracking-wide truncate pr-4 transition-colors">
               {t("group_members_title")}: {groupName}
@@ -249,13 +265,14 @@ const GroupMembersModal = ({
           </div>
 
           <div className="p-6 flex-1 flex flex-col min-h-0 space-y-5 overflow-y-auto cyber-scrollbar">
+            {/* ô lọc thành viên theo tên hoặc email */}
             <div className="space-y-1.5 shrink-0">
               <div className="w-full relative">
                 <input
                   type="text"
                   value={localFilter}
                   onChange={(e) => setLocalFilter(e.target.value)}
-                  placeholder={t("search_placeholder") || "Search..."}
+                  placeholder={t("search_placeholder") || "search_placeholder"}
                   className="w-full bg-gray-50 dark:bg-[#0b0f19] border border-gray-200 dark:border-[#232d42] text-xs text-gray-900 dark:text-gray-100 rounded-xl pl-11 pr-4 py-2.5 transition-colors"
                 />
                 <FiSearch
@@ -265,6 +282,7 @@ const GroupMembersModal = ({
               </div>
             </div>
 
+            {/* khu vực thêm thành viên mới (chỉ hiển thị khi có quyền) */}
             {hasAddPermission ? (
               <div
                 className="space-y-2 shrink-0 border-t border-gray-200 dark:border-[#232d42]/40 pt-4 relative overflow-visible transition-colors"
@@ -301,36 +319,32 @@ const GroupMembersModal = ({
                   >
                     {t("add_btn")}
                   </button>
-                  {isDropdownOpen && searchResults.length > 0 && (() => {
-                    const filteredResults = searchResults.filter(
-                      (u) =>
-                        !members.some((m) => m.id === u.id) &&
-                        !pendingUsers.some((p) => p.id === u.id)
-                    );
-                    if (filteredResults.length === 0) return null;
-                    return (
-                      <div
-                        onScroll={handleSearchScroll}
-                        className="cyber-scrollbar absolute left-0 right-0 mt-11 max-h-[140px] overflow-y-auto bg-white dark:bg-[#1a202c] border border-gray-200 dark:border-[#232d42] rounded-xl shadow-2xl z-[110] transition-colors"
-                      >
-                        {filteredResults.map((user) => (
-                          <div
-                            key={user.id}
-                            onClick={() => handleSelectUserPending(user)}
-                            className="px-4 py-2 text-xs cursor-pointer flex flex-col text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                          >
-                            <span className="font-bold text-gray-900 dark:text-white">
-                              {user.fullname}
-                            </span>
-                            <span className="text-[10px] font-mono">
-                              {user.email}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
+
+                  {/* dropdown kết quả tìm kiếm người dùng */}
+                  {isDropdownOpen && filteredSearchResults.length > 0 && (
+                    <div
+                      onScroll={handleSearchScroll}
+                      className="cyber-scrollbar absolute left-0 right-0 mt-11 max-h-[140px] overflow-y-auto bg-white dark:bg-[#1a202c] border border-gray-200 dark:border-[#232d42] rounded-xl shadow-2xl z-[110] transition-colors"
+                    >
+                      {filteredSearchResults.map((user) => (
+                        <div
+                          key={user.id}
+                          onClick={() => handleSelectUserPending(user)}
+                          className="px-4 py-2 text-xs cursor-pointer flex flex-col text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <span className="font-bold text-gray-900 dark:text-white">
+                            {user.fullname}
+                          </span>
+                          <span className="text-[10px] font-mono">
+                            {user.email}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                {/* danh sách chip người dùng đang chờ thêm */}
                 {pendingUsers.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1 animate-fade-in">
                     {pendingUsers.map((pUser) => (
@@ -359,6 +373,7 @@ const GroupMembersModal = ({
               </div>
             )}
 
+            {/* danh sách thành viên hiện tại của nhóm */}
             <div className="space-y-2 border-t border-gray-200 dark:border-[#232d42]/40 pt-4 shrink-0 transition-colors">
               <label className="text-[10px] font-mono font-bold tracking-widest text-gray-500 dark:text-gray-400 uppercase transition-colors">
                 {t("users_label")} ({filteredMembers.length})
@@ -409,6 +424,7 @@ const GroupMembersModal = ({
               </div>
             </div>
 
+            {/* footer: nút đóng modal */}
             <div className="pt-4 border-t border-gray-200 dark:border-[#232d42] flex justify-end items-center bg-white dark:bg-[#161b26] shrink-0 transition-colors">
               <button
                 type="button"
