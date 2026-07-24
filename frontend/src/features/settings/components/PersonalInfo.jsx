@@ -4,13 +4,17 @@ import { useAuth } from "@/features/auth/AuthContext";
 import { useToast } from "@/components/Toast";
 import { updateProfileApi } from "@/features/settings/settingsApi";
 import ConfirmModal from "@/components/ConfirmModal";
-import { useLanguage } from "@/context/LanguageContext"; // BKAV HaiHS: Import hook ngôn ngữ
+import { useLanguage } from "@/context/LanguageContext";
+import {
+  PROFILE_FIELDS,
+  CONFIRM_TYPES,
+} from "@/features/settings/constants/settingsConstants";
 
 // BKAV HaiHS: component chỉnh sửa thông tin liên lạc - start
 const PersonalInfo = () => {
   const { user, updateUser } = useAuth();
   const { showToast } = useToast();
-  const { t, tError } = useLanguage(); // BKAV HaiHS: Khai báo hàm dịch thuật
+  const { t, tError } = useLanguage();
 
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -25,57 +29,73 @@ const PersonalInfo = () => {
     targetValue: "",
   });
 
+  // BKAV HaiHS : Cập nhật state số điện thoại và địa chỉ khi thông tin người dùng thay đổi - start
   useEffect(() => {
     if (user) {
       setPhone(user.phone || "");
       setAddress(user.address || "");
     }
   }, [user]);
+  // BKAV HaiHS : Cập nhật state số điện thoại và địa chỉ khi thông tin người dùng thay đổi - end
 
+  // BKAV HaiHS : Kiểm tra định dạng số điện thoại hợp lệ (10 chữ số) - start
   const validatePhoneNumber = (num) => {
     const regex = /^[0-9]{10}$/;
     return regex.test(num);
   };
+  // BKAV HaiHS : Kiểm tra định dạng số điện thoại hợp lệ (10 chữ số) - end
 
+  // BKAV HaiHS : Mở modal xác nhận trước khi lưu thông tin liên lạc - start
   const handleOpenSaveConfirm = (type, value) => {
-    if (type === "phone" && !validatePhoneNumber(value)) {
+    if (type === PROFILE_FIELDS.PHONE && !validatePhoneNumber(value)) {
       showToast(
-        t("toast_phone_invalid") || "Số điện thoại không đúng!",
+        t("toast_phone_invalid") || "toast_phone_invalid",
         "warning",
       );
       return;
     }
-    setConfirmModal({ isOpen: true, type: `save_${type}`, targetValue: value });
+    const confirmType =
+      type === PROFILE_FIELDS.PHONE
+        ? CONFIRM_TYPES.SAVE_PHONE
+        : CONFIRM_TYPES.SAVE_ADDRESS;
+    setConfirmModal({ isOpen: true, type: confirmType, targetValue: value });
   };
+  // BKAV HaiHS : Mở modal xác nhận trước khi lưu thông tin liên lạc - end
 
+  // BKAV HaiHS : Mở modal xác nhận trước khi hủy bỏ chỉnh sửa nếu dữ liệu bị thay đổi - start
   const handleOpenCancelConfirm = (type) => {
-    const isDataChanged =
-      type === "phone"
-        ? phone !== (user?.phone || "")
-        : address !== (user?.address || "");
+    const isPhone = type === PROFILE_FIELDS.PHONE;
+    const isDataChanged = isPhone
+      ? phone !== (user?.phone || "")
+      : address !== (user?.address || "");
     if (isDataChanged) {
+      const confirmType = isPhone
+        ? CONFIRM_TYPES.CANCEL_PHONE
+        : CONFIRM_TYPES.CANCEL_ADDRESS;
       setConfirmModal({
         isOpen: true,
-        type: `cancel_${type}`,
+        type: confirmType,
         targetValue: "",
       });
     } else {
-      type === "phone" ? setIsEditingPhone(false) : setIsEditingAddress(false);
+      isPhone ? setIsEditingPhone(false) : setIsEditingAddress(false);
     }
   };
+  // BKAV HaiHS : Mở modal xác nhận trước khi hủy bỏ chỉnh sửa nếu dữ liệu bị thay đổi - end
 
-  // BKAV HaiHS : Goi API cap nhat thong tin lien lac va luu vao context - start
+  // BKAV HaiHS : Gọi API cập nhật thông tin liên lạc và lưu vào context - start
   const executeUpdateProfile = async (targetType, value) => {
     setIsSubmitting(true);
+    const isPhone = targetType === PROFILE_FIELDS.PHONE;
     const payload = {
-      phone: targetType === "phone" ? value : phone,
-      address: targetType === "address" ? value : address,
+      phone: isPhone ? value : phone,
+      address: !isPhone ? value : address,
     };
 
     try {
       const res = await updateProfileApi(payload);
       showToast(
-        t("toast_profile_success") || "Cập nhật thành công!",
+        t("toast_profile_success") || "toast_profile_success",
         "success",
       );
 
@@ -83,35 +103,38 @@ const PersonalInfo = () => {
         updateUser(res.data.user, res.data.token);
       }
 
-      targetType === "phone"
-        ? setIsEditingPhone(false)
-        : setIsEditingAddress(false);
+      isPhone ? setIsEditingPhone(false) : setIsEditingAddress(false);
     } catch (err) {
       showToast(tError(err), "error");
-      if (targetType === "phone") setPhone(user?.phone || "");
+      if (isPhone) setPhone(user?.phone || "");
       else setAddress(user?.address || "");
     } finally {
       setIsSubmitting(false);
       setConfirmModal({ isOpen: false, type: "", targetValue: "" });
     }
   };
-  // BKAV HaiHS : Goi API cap nhat thong tin lien lac va luu vao context - end
+  // BKAV HaiHS : Gọi API cập nhật thông tin liên lạc và lưu vào context - end
 
+  // BKAV HaiHS : Thực thi hành động tương ứng sau khi người dùng xác nhận trên ConfirmModal - start
   const handleConfirmAction = () => {
     const { type, targetValue } = confirmModal;
-    if (type === "save_phone") executeUpdateProfile("phone", targetValue);
-    if (type === "save_address") executeUpdateProfile("address", targetValue);
-    if (type === "cancel_phone") {
+    if (type === CONFIRM_TYPES.SAVE_PHONE) {
+      executeUpdateProfile(PROFILE_FIELDS.PHONE, targetValue);
+    } else if (type === CONFIRM_TYPES.SAVE_ADDRESS) {
+      executeUpdateProfile(PROFILE_FIELDS.ADDRESS, targetValue);
+    } else if (type === CONFIRM_TYPES.CANCEL_PHONE) {
       setPhone(user?.phone || "");
       setIsEditingPhone(false);
       setConfirmModal({ isOpen: false, type: "", targetValue: "" });
-    }
-    if (type === "cancel_address") {
+    } else if (type === CONFIRM_TYPES.CANCEL_ADDRESS) {
       setAddress(user?.address || "");
       setIsEditingAddress(false);
       setConfirmModal({ isOpen: false, type: "", targetValue: "" });
     }
   };
+  // BKAV HaiHS : Thực thi hành động tương ứng sau khi người dùng xác nhận trên ConfirmModal - end
+
+  const isSaveAction = confirmModal.type.startsWith("save");
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -121,7 +144,7 @@ const PersonalInfo = () => {
       </div>
 
       <div className="bg-white dark:bg-[#161b26] border border-gray-200 dark:border-[#232d42] rounded-2xl p-5 divide-y divide-gray-100 dark:divide-[#232d42]/60 shadow-xl transition-colors duration-300">
-        {/* ROW 1: PHONE NUMBER */}
+        {/* row số điện thoại */}
         <div className="flex items-center justify-between py-4 first:pt-1 last:pb-1 group">
           <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
             <div className="w-10 h-10 rounded-xl bg-gray-50 dark:bg-[#0b0f19] border border-gray-200 dark:border-[#232d42] flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 shadow-inner transition-colors duration-300">
@@ -154,7 +177,7 @@ const PersonalInfo = () => {
               <>
                 <button
                   type="button"
-                  onClick={() => handleOpenCancelConfirm("phone")}
+                  onClick={() => handleOpenCancelConfirm(PROFILE_FIELDS.PHONE)}
                   disabled={isSubmitting}
                   className="p-2 text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer"
                 >
@@ -162,7 +185,7 @@ const PersonalInfo = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleOpenSaveConfirm("phone", phone)}
+                  onClick={() => handleOpenSaveConfirm(PROFILE_FIELDS.PHONE, phone)}
                   disabled={isSubmitting}
                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-[11px] font-bold text-white rounded-full transition-all cursor-pointer shadow-md flex items-center gap-1.5"
                 >
@@ -186,7 +209,7 @@ const PersonalInfo = () => {
           </div>
         </div>
 
-        {/* ROW 2: ADDRESS */}
+        {/* row địa chỉ */}
         <div className="flex items-center justify-between py-4 first:pt-1 last:pb-1 group">
           <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
             <div className="w-10 h-10 rounded-xl bg-gray-50 dark:bg-[#0b0f19] border border-gray-200 dark:border-[#232d42] flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 shadow-inner transition-colors duration-300">
@@ -204,7 +227,7 @@ const PersonalInfo = () => {
                   disabled={isSubmitting}
                   className="w-full max-w-xl bg-gray-50 dark:bg-[#0b0f19] border border-blue-500/40 text-xs text-gray-900 dark:text-gray-100 rounded-lg px-3 py-1.5 focus:outline-none transition-colors"
                   placeholder={
-                    t("address_placeholder") || "e.g. Hà Nội, Vietnam"
+                    t("address_placeholder") || "address_placeholder"
                   }
                   autoFocus
                 />
@@ -221,7 +244,7 @@ const PersonalInfo = () => {
               <>
                 <button
                   type="button"
-                  onClick={() => handleOpenCancelConfirm("address")}
+                  onClick={() => handleOpenCancelConfirm(PROFILE_FIELDS.ADDRESS)}
                   disabled={isSubmitting}
                   className="p-2 text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer"
                 >
@@ -229,7 +252,7 @@ const PersonalInfo = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleOpenSaveConfirm("address", address)}
+                  onClick={() => handleOpenSaveConfirm(PROFILE_FIELDS.ADDRESS, address)}
                   disabled={isSubmitting}
                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-[11px] font-bold text-white rounded-full transition-all cursor-pointer shadow-md flex items-center gap-1.5"
                 >
@@ -260,23 +283,11 @@ const PersonalInfo = () => {
           setConfirmModal({ isOpen: false, type: "", targetValue: "" })
         }
         onConfirm={handleConfirmAction}
-        title={
-          confirmModal.type.startsWith("save")
-            ? t("confirm_save_title")
-            : t("confirm_cancel_title")
-        }
-        message={
-          confirmModal.type.startsWith("save")
-            ? t("confirm_save_msg")
-            : t("confirm_cancel_msg")
-        }
-        confirmText={
-          confirmModal.type.startsWith("save")
-            ? t("confirm_btn")
-            : t("cancel_btn")
-        }
+        title={isSaveAction ? t("confirm_save_title") : t("confirm_cancel_title")}
+        message={isSaveAction ? t("confirm_save_msg") : t("confirm_cancel_msg")}
+        confirmText={isSaveAction ? t("confirm_btn") : t("cancel_btn")}
         cancelText={t("back_btn")}
-        type={confirmModal.type.startsWith("save") ? "info" : "warning"}
+        type={isSaveAction ? "info" : "warning"}
       />
     </div>
   );
