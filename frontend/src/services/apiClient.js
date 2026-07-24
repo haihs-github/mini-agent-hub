@@ -1,6 +1,18 @@
 import axios from "axios";
 
-// Biến lưu token tạm thời trong RAM của trình duyệt
+// BKAV HaiHS : Hằng số URL gốc của Server API lấy từ biến môi trường - start
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+// BKAV HaiHS : Hằng số URL gốc của Server API lấy từ biến môi trường - end
+
+// BKAV HaiHS : Danh sách các API endpoint không kích hoạt cơ chế tự động refresh token - start
+const AUTH_EXCLUDED_ENDPOINTS = [
+  "/auth/refresh",
+  "/auth/login",
+  "/auth/logout",
+];
+// BKAV HaiHS : Danh sách các API endpoint không kích hoạt cơ chế tự động refresh token - end
+
+// BKAV HaiHS : Quản lý Access Token tạm thời lưu trong RAM trình duyệt - start
 let _accessToken = null;
 
 export const setAccessToken = (token) => {
@@ -10,33 +22,28 @@ export const setAccessToken = (token) => {
 export const getAccessToken = () => {
   return _accessToken;
 };
+// BKAV HaiHS : Quản lý Access Token tạm thời lưu trong RAM trình duyệt - end
 
-// BKAV HaiHS : Khởi tạo cấu hình cấu trúc Axios Instance dùng chung - start
+// BKAV HaiHS : Khởi tạo cấu hình Axios Instance dùng chung - start
 const apiClient = axios.create({
-  // Tự động bốc URL Server từ biến môi trường, fallback về localhost
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000/api",
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
-  withCredentials: true, // Cho phép trình duyệt tự gửi kèm Cookie (refreshToken) lên Backend
+  withCredentials: true,
 });
-// BKAV HaiHS : Khởi tạo cấu hình cấu trúc Axios Instance dùng chung - end
+// BKAV HaiHS : Khởi tạo cấu hình Axios Instance dùng chung - end
 
 let refreshPromise = null;
 
-// Hàm memoized để gom các cuộc gọi /auth/refresh song song thành một promise duy nhất
+// BKAV HaiHS : Hàm gom các yêu cầu refresh token song song thành một Promise duy nhất - start
 export const memoizedRefresh = () => {
   if (refreshPromise) {
     return refreshPromise;
   }
 
-  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
   refreshPromise = axios
-    .post(
-      `${baseUrl}/auth/refresh`,
-      {},
-      { withCredentials: true }
-    )
+    .post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
     .then((res) => {
       refreshPromise = null;
       return res;
@@ -48,8 +55,9 @@ export const memoizedRefresh = () => {
 
   return refreshPromise;
 };
+// BKAV HaiHS : Hàm gom các yêu cầu refresh token song song thành một Promise duy nhất - end
 
-// BKAV HaiHS : Tự động gài Token từ RAM vào Header - start
+// BKAV HaiHS : Request Interceptor tự động gắn Access Token từ RAM vào Header - start
 apiClient.interceptors.request.use(
   (config) => {
     if (_accessToken) {
@@ -59,7 +67,7 @@ apiClient.interceptors.request.use(
   },
   (error) => Promise.reject(error),
 );
-// BKAV HaiHS : Tự động gài Token từ RAM vào Header - end
+// BKAV HaiHS : Request Interceptor tự động gắn Access Token từ RAM vào Header - end
 
 // BKAV HaiHS : Response Interceptor tự động refresh token khi gặp lỗi 401 - start
 apiClient.interceptors.response.use(
@@ -67,30 +75,27 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Nếu gặp lỗi 401 (Access Token hết hạn) và chưa thử lại lần nào, đồng thời không phải là các request liên quan đến auth (refresh, login, logout)
+    const isExcludedEndpoint = AUTH_EXCLUDED_ENDPOINTS.some((endpoint) =>
+      originalRequest?.url?.includes(endpoint),
+    );
+
+    // Nếu gặp lỗi 401 (Access Token hết hạn), chưa thử lại và không thuộc danh sách endpoint loại trừ
     if (
       error.response &&
       error.response.status === 401 &&
       !originalRequest._retry &&
-      originalRequest.url &&
-      !originalRequest.url.includes("/auth/refresh") &&
-      !originalRequest.url.includes("/auth/login") &&
-      !originalRequest.url.includes("/auth/logout")
+      !isExcludedEndpoint
     ) {
       originalRequest._retry = true;
       try {
-        // Gọi API /auth/refresh để lấy Access Token mới qua cơ chế gom cuộc gọi
         const res = await memoizedRefresh();
         const newAccessToken = res.data.data.token;
 
-        // Lưu lại token mới vào RAM
         setAccessToken(newAccessToken);
 
-        // Cập nhật token mới vào request và gửi lại
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
-        // Nếu gọi refresh bị lỗi (Refresh Token hết hạn) -> Xóa token và báo đăng xuất
         setAccessToken(null);
         window.dispatchEvent(new CustomEvent("auth-logout"));
         return Promise.reject(refreshError);
@@ -99,18 +104,18 @@ apiClient.interceptors.response.use(
 
     // BKAV HaiHS : Bắt lỗi 429 Rate Limit và phát sự kiện hiển thị toast - start
     if (error.response && error.response.status === 429) {
-      const message = error.response.data?.message || "Thao tác quá nhanh, vui lòng thử lại!";
+      const message = error.response.data?.message || "rate_limit_exceeded";
       window.dispatchEvent(
         new CustomEvent("show-toast", {
           detail: { message, type: "error" },
-        })
+        }),
       );
       error._alreadyToasted = true;
     }
     // BKAV HaiHS : Bắt lỗi 429 Rate Limit và phát sự kiện hiển thị toast - end
 
     return Promise.reject(error);
-  }
+  },
 );
 // BKAV HaiHS : Response Interceptor tự động refresh token khi gặp lỗi 401 - end
 
