@@ -1,6 +1,44 @@
 import React from "react";
 import { FiChevronLeft, FiChevronRight } from "react-icons/fi";
-import { useLanguage } from "@/context/LanguageContext"; // BKAV HaiHS: Import hook ngôn ngữ
+import { useLanguage } from "@/context/LanguageContext";
+
+// BKAV HaiHS : Hàm tính toán danh sách số trang hiển thị với dấu ba chấm thu gọn - start
+const getPageNumbers = (current, total) => {
+  const pageNumbers = [];
+  const maxVisiblePages = 7;
+
+  if (total <= maxVisiblePages) {
+    for (let i = 1; i <= total; i++) {
+      pageNumbers.push(i);
+    }
+  } else {
+    if (current <= 4) {
+      pageNumbers.push(1, 2, 3, 4, 5, "...", total);
+    } else if (current >= total - 3) {
+      pageNumbers.push(
+        1,
+        "...",
+        total - 4,
+        total - 3,
+        total - 2,
+        total - 1,
+        total,
+      );
+    } else {
+      pageNumbers.push(
+        1,
+        "...",
+        current - 1,
+        current,
+        current + 1,
+        "...",
+        total,
+      );
+    }
+  }
+  return pageNumbers;
+};
+// BKAV HaiHS : Hàm tính toán danh sách số trang hiển thị với dấu ba chấm thu gọn - end
 
 // BKAV HaiHS : Component Phân trang danh sách user - start
 const UserPagination = ({
@@ -9,44 +47,23 @@ const UserPagination = ({
   totalItems,
   onPageChange,
 }) => {
-  const { t } = useLanguage(); // BKAV HaiHS: Khai báo hàm dịch thuật
+  const { t } = useLanguage();
 
   if (totalPages <= 1) return null;
 
-  // Hàm tính toán thu gọn các trang ở giữa bằng dấu ba chấm
-  const getPageNumbers = (current, total) => {
-    const pageNumbers = [];
-    const maxVisiblePages = 7;
-
-    if (total <= maxVisiblePages) {
-      for (let i = 1; i <= total; i++) {
-        pageNumbers.push(i);
-      }
-    } else {
-      if (current <= 4) {
-        pageNumbers.push(1, 2, 3, 4, 5, "...", total);
-      } else if (current >= total - 3) {
-        pageNumbers.push(1, "...", total - 4, total - 3, total - 2, total - 1, total);
-      } else {
-        pageNumbers.push(1, "...", current - 1, current, current + 1, "...", total);
-      }
-    }
-    return pageNumbers;
-  };
-
   return (
     <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 px-2 select-none">
-      {/* BKAV HaiHS: Đổi màu chữ hiển thị số trang và dịch thuật */}
+      {/* số trang hiển thị */}
       <div className="text-xs font-medium text-gray-500 dark:text-gray-400 transition-colors duration-300">
-        {t("showing_page") || "Hiển thị trang"}{" "}
+        {t("showing_page") || "showing_page"}{" "}
         <span className="text-gray-900 dark:text-gray-300">{currentPage}</span>{" "}
-        {t("of_total") || "trên tổng số"}{" "}
+        {t("of_total") || "of_total"}{" "}
         <span className="text-gray-900 dark:text-gray-300">{totalPages}</span>{" "}
-        {t("pages") || "trang"} ({totalItems} {t("nodes") || "nodes"})
+        {t("pages") || "pages"} ({totalItems} {t("nodes") || "nodes"})
       </div>
 
       <div className="flex items-center gap-1.5 text-xs font-bold">
-        {/* Nút lùi trang */}
+        {/* nút lùi trang */}
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
@@ -55,7 +72,7 @@ const UserPagination = ({
           <FiChevronLeft size={14} />
         </button>
 
-        {/* Vòng lặp vẽ các nút số trang */}
+        {/* vòng lặp vẽ các nút số trang */}
         {getPageNumbers(currentPage, totalPages).map((pageNum, idx) => {
           if (pageNum === "...") {
             return (
@@ -84,7 +101,7 @@ const UserPagination = ({
           );
         })}
 
-        {/* Nút tiến trang */}
+        {/* nút tiến trang */}
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
