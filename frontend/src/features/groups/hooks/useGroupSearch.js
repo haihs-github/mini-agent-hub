@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { searchGroupsApi } from "@/features/groups/groupApi";
 import { useOutsideClick } from "@/hooks/useOutsideClick";
 
@@ -16,6 +16,21 @@ export const useGroupSearch = ({ onSearchChange }) => {
 
   const dropdownRef = useRef(null);
   const searchTimeoutRef = useRef(null);
+
+  // BKAV HaiHS : Giữ stable reference cho onSearchChange để tránh stale closure trong các handler - start
+  const onSearchChangeRef = useRef(onSearchChange);
+  useEffect(() => {
+    onSearchChangeRef.current = onSearchChange;
+  }, [onSearchChange]);
+  // BKAV HaiHS : Giữ stable reference cho onSearchChange để tránh stale closure trong các handler - end
+
+  // BKAV HaiHS : Hàm dùng chung để reset toàn bộ trạng thái dropdown và thông báo thay đổi trang - start
+  const resetDropdownState = useCallback(() => {
+    setIsDropdownOpen(false);
+    setDropdownResults([]);
+    onSearchChangeRef.current({ page: 1 });
+  }, []);
+  // BKAV HaiHS : Hàm dùng chung để reset toàn bộ trạng thái dropdown và thông báo thay đổi trang - end
 
   // BKAV HaiHS : Tự động đóng dropdown khi click ra ngoài - start
   useOutsideClick(dropdownRef, () => setIsDropdownOpen(false));
@@ -87,9 +102,7 @@ export const useGroupSearch = ({ onSearchChange }) => {
     setSelectedDropdownGroup(group);
     setSearchKeyword(group.name);
     setActiveSearchQuery("");
-    setIsDropdownOpen(false);
-    setDropdownResults([]);
-    onSearchChange({ page: 1 });
+    resetDropdownState();
   };
   // BKAV HaiHS : Chọn nhóm từ dropdown để lọc bảng danh sách - end
 
@@ -97,10 +110,8 @@ export const useGroupSearch = ({ onSearchChange }) => {
   const handleCommitSearch = () => {
     setActiveSearchQuery(searchKeyword);
     setSelectedDropdownGroup(null);
-    setIsDropdownOpen(false);
-    setDropdownResults([]);
     setSearchKeyword("");
-    onSearchChange({ page: 1 });
+    resetDropdownState();
   };
   // BKAV HaiHS : Thực thi tìm kiếm theo từ khóa khi bấm nút hoặc nhấn Enter - end
 
@@ -109,9 +120,7 @@ export const useGroupSearch = ({ onSearchChange }) => {
     setSearchKeyword("");
     setActiveSearchQuery("");
     setSelectedDropdownGroup(null);
-    setIsDropdownOpen(false);
-    setDropdownResults([]);
-    onSearchChange({ page: 1 });
+    resetDropdownState();
   };
   // BKAV HaiHS : Xóa toàn bộ bộ lọc tìm kiếm và trả về trạng thái mặc định - end
 
@@ -121,9 +130,7 @@ export const useGroupSearch = ({ onSearchChange }) => {
     if (!val.trim()) {
       setActiveSearchQuery("");
       setSelectedDropdownGroup(null);
-      setIsDropdownOpen(false);
-      setDropdownResults([]);
-      onSearchChange({ page: 1 });
+      resetDropdownState();
     }
   };
   // BKAV HaiHS : Xử lý sự kiện thay đổi ô nhập từ khóa tìm kiếm - end
