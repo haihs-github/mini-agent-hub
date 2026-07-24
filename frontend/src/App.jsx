@@ -13,7 +13,7 @@ import LoginForm from "@/features/auth/components/LoginForm";
 import UserWindow from "@/features/users/components/UserWindow";
 import GroupWindow from "@/features/groups/components/GroupWindow";
 import Sidebar from "@/components/Sidebar/SidebarIndex.jsx";
-import ChatWindow from "@/features/chat/components/ChatWorkspace/ChatWindow.jsx";
+import ChatWindow from "@/features/chat/components/ChatWindow.jsx";
 import { useChatStream } from "@/features/chat/hooks/useChatStream.js";
 import SettingsWindow from "@/features/settings/components/SettingsWindow.jsx";
 import { ThemeProvider } from "@/context/ThemeContext.jsx";

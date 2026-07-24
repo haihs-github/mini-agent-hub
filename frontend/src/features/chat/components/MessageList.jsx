@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { FiLoader } from "react-icons/fi";
-import UserMessageItem from "@/features/chat/components/ChatWorkspace/UserMessageItem";
-import AIMessageItem from "@/features/chat/components/ChatWorkspace/AIMessageItem";
+import UserMessageItem from "@/features/chat/components/UserMessageItem";
+import AIMessageItem from "@/features/chat/components/AIMessageItem";
 import { useLanguage } from "@/context/LanguageContext";
 
 // BKAV HaiHS : Component danh sách tin nhắn hỗ trợ phân trang cuộn ngược và đồng bộ ảnh khi refresh trang - start

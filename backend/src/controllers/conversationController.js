@@ -5,6 +5,7 @@ const aiStreamManager = require("../services/aiStreamManager");
 const redisStreamService = require("../services/redisStreamService");
 const conversationRepository = require("../repositories/conversationRepository");
 const { MESSAGES } = require("../constants/messages");
+const aiConfigManager = require("../config/aiConfigManager"); // BKAV HaiHS: Import aiConfigManager để đọc yaml
 
 // BKAV HaiHS : Định nghĩa lớp ConversationController điều phối nghiệp vụ phòng chat và SSE - start
 class ConversationController {
@@ -19,7 +20,22 @@ class ConversationController {
     this.handleAbort = this.handleAbort.bind(this);
     this.handleStop = this.handleStop.bind(this);
     this.clearAllConversations = this.clearAllConversations.bind(this);
+    this.getAvailableModels = this.getAvailableModels.bind(this); // BKAV HaiHS: Bind getAvailableModels
   }
+
+  // BKAV HaiHS : API trả về danh sách các model AI đang hoạt động - start
+  async getAvailableModels(req, res, next) {
+    try {
+      const models = aiConfigManager.getActiveModels();
+      res.status(200).json({
+        message: "Success",
+        data: models,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+  // BKAV HaiHS : API trả về danh sách các model AI đang hoạt động - end
 
   // BKAV HaiHS : Tạo một cuộc hội thoại mới - start
   async createConversation(req, res, next) {

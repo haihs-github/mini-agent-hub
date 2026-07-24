@@ -20,6 +20,14 @@ router.post(
 );
 // BKAV HaiHS : API Tạo phòng chat mới (CONV_C) - end
 
+// BKAV HaiHS : API Lấy danh sách các model AI đang hoạt động - start
+router.get(
+  "/models",
+  authMiddleware,
+  conversationController.getAvailableModels,
+);
+// BKAV HaiHS : API Lấy danh sách các model AI đang hoạt động - end
+
 // BKAV HaiHS : API Lấy toàn bộ danh sách phòng chat của chính mình (CONV_R) - start
 router.get(
   "/",
@@ -69,7 +77,7 @@ router.delete(
 );
 // BKAV HaiHS : API Xóa phòng chat của chính mình (CONV_D) - end
 
-// BKAV HaiHS : API Xu ly Chat va phan phoi stream - start
+// BKAV HaiHS : API Tạo phòng chat của chính mình (CONV_C) - start
 router.post(
   "/:id/chat",
   authMiddleware,
@@ -78,7 +86,9 @@ router.post(
   upload.array("images", 5),
   conversationController.handleChat,
 );
+// BKAV HaiHS : API Tạo phòng chat của chính mình (CONV_C) - end
 
+// BKAV HaiHS : API gửi nội dung chat - start
 router.get(
   "/:id/chat",
   authMiddleware,
@@ -86,13 +96,16 @@ router.get(
   chatLimiter,
   conversationController.handleStreamReconnect,
 );
+// BKAV HaiHS : API gửi nội dung chat - end
 
+// BKAV HaiHS : API dừng chat - start
 router.post(
   "/:id/stop",
   authMiddleware,
   permissionMiddleware("CHAT"),
   conversationController.handleStop,
 );
+// BKAV HaiHS : API dừng chat - end
 
 // BKAV HaiHS : API Huy bo luong AI cheo may chu qua Redis Pub/Sub - start
 router.post(
@@ -102,6 +115,5 @@ router.post(
   conversationController.handleAbort,
 );
 // BKAV HaiHS : API Huy bo luong AI cheo may chu qua Redis Pub/Sub - end
-// BKAV HaiHS : API Xu ly Chat va phan phoi stream - end
 
 module.exports = router;

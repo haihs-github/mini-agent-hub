@@ -10,32 +10,36 @@ class AiConfigManager {
     this.#loadConfigs();
   }
 
-  // ==========================================
-  // PUBLIC METHODS (Viết lên phía trên)
-  // ==========================================
-
   // BKAV HaiHS : Trích xuất thông tin cấu hình của một model cụ thể - start
   getModelConfig(modelId) {
     const config = this.configs.get(modelId);
     if (!config) {
-      return this.configs.get(this.defaultModelId) || {
-        id: modelId,
-        provider: "langchain",
-        temperature: 0.5,
-        system_prompt: "Bạn là một trợ lý AI hữu ích.",
-        features: {
-          supports_images: false,
-          max_images: 0,
-        },
-      };
+      return (
+        this.configs.get(this.defaultModelId) || {
+          id: modelId,
+          provider: "langchain",
+          temperature: 0.5,
+          system_prompt: "Bạn là một trợ lý AI hữu ích.",
+          features: {
+            supports_images: false,
+            max_images: 0,
+          },
+        }
+      );
     }
     return config;
   }
   // BKAV HaiHS : Trích xuất thông tin cấu hình của một model cụ thể - end
 
-  // ==========================================
-  // PRIVATE METHODS (Viết xuống phía dưới)
-  // ==========================================
+  // BKAV HaiHS : Trích xuất danh sách tất cả các mô hình AI khả dụng - start
+  getActiveModels() {
+    return Array.from(this.configs.values()).map((model) => ({
+      id: model.id,
+      provider: model.provider,
+      features: model.features,
+    }));
+  }
+  // BKAV HaiHS : Trích xuất danh sách tất cả các mô hình AI khả dụng - end
 
   // BKAV HaiHS : Đọc và phân tích file YAML - start
   #loadConfigs() {
@@ -49,7 +53,9 @@ class AiConfigManager {
       const data = yaml.load(fileContent);
 
       if (!data || !Array.isArray(data.models)) {
-        throw new Error("Cấu trúc file YAML không hợp lệ, trường 'models' phải là mảng!");
+        throw new Error(
+          "Cấu trúc file YAML không hợp lệ, trường 'models' phải là mảng!",
+        );
       }
 
       for (const model of data.models) {
@@ -57,7 +63,10 @@ class AiConfigManager {
         this.configs.set(model.id, model);
       }
     } catch (error) {
-      console.error("[AiConfigManager Error] Không thể load cấu hình AI:", error.message);
+      console.error(
+        "[AiConfigManager Error] Không thể load cấu hình AI:",
+        error.message,
+      );
       throw error;
     }
   }
@@ -69,9 +78,14 @@ class AiConfigManager {
       throw new Error("Thiếu thuộc tính 'id' bắt buộc cho model!");
     }
     if (!model.provider || !["langchain", "flowise"].includes(model.provider)) {
-      throw new Error(`Model ${model.id} có 'provider' không hợp lệ (phải là langchain hoặc flowise)!`);
+      throw new Error(
+        `Model ${model.id} có 'provider' không hợp lệ (phải là langchain hoặc flowise)!`,
+      );
     }
-    if (model.temperature === undefined || typeof model.temperature !== "number") {
+    if (
+      model.temperature === undefined ||
+      typeof model.temperature !== "number"
+    ) {
       model.temperature = 0.5;
     }
     if (!model.features) {

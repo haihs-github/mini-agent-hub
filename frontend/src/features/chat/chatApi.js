@@ -45,3 +45,10 @@ export const clearAllChatHistoryApi = async () => {
   return response.data;
 };
 // BKAV HaiHS: API xóa toàn bộ các cuộc hội thoại của tài khoản - end
+
+// BKAV HaiHS : Lấy danh sách các model AI đang hoạt động từ Backend - start
+export const getAiModelsApi = async () => {
+  const response = await apiClient.get("/conversations/models");
+  return response.data;
+};
+// BKAV HaiHS : Lấy danh sách các model AI đang hoạt động từ Backend - end

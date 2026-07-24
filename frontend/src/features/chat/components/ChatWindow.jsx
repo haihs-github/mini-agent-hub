@@ -1,7 +1,8 @@
-import React, { useState } from "react";
-import ChatHeader from "@/features/chat/components/ChatWorkspace/ChatHeader";
-import MessageList from "@/features/chat/components/ChatWorkspace/MessageList";
-import ChatInputArea from "@/features/chat/components/ChatWorkspace/ChatInputArea";
+import React, { useState, useEffect } from "react";
+import ChatHeader from "@/features/chat/components/ChatHeader";
+import MessageList from "@/features/chat/components/MessageList";
+import ChatInputArea from "@/features/chat/components/ChatInputArea";
+import { getAiModelsApi } from "@/features/chat/chatApi"; // BKAV HaiHS: Import API lấy danh sách model
 
 // BKAV HaiHS : Component chính của workspace chat, kết hợp header, danh sách tin nhắn và khu vực nhập liệu - start
 const ChatWindow = ({
@@ -19,6 +20,30 @@ const ChatWindow = ({
   isLoadingMore,
 }) => {
   const [selectedModel, setSelectedModel] = useState("qwen/qwen3.6-27b");
+  const [models, setModels] = useState([]);
+
+  // BKAV HaiHS : Tải danh sách model AI hoạt động từ Backend - start
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const res = await getAiModelsApi();
+        if (res?.data) {
+          setModels(res.data);
+          // Chọn model đầu tiên làm mặc định nếu có danh sách và model cũ không tồn tại trong danh sách mới
+          if (res.data.length > 0) {
+            const hasDefault = res.data.some((m) => m.id === "qwen/qwen3.6-27b");
+            if (!hasDefault) {
+              setSelectedModel(res.data[0].id);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Không thể tải danh sách model AI từ Backend", error);
+      }
+    };
+    fetchModels();
+  }, []);
+  // BKAV HaiHS : Tải danh sách model AI hoạt động từ Backend - end
 
   return (
     /* BKAV HaiHS: Đồng bộ màu nền của toàn bộ vùng ChatWindow theo theme */
@@ -27,6 +52,7 @@ const ChatWindow = ({
       <ChatHeader
         selectedModel={selectedModel}
         setSelectedModel={setSelectedModel}
+        models={models}
       />
 
       {/* 2. Danh sách tin nhắn kèm bộ điều phối cuộn vô hạn ngược dòng dữ liệu */}

@@ -1,33 +1,34 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { FiChevronDown, FiCpu, FiMenu } from "react-icons/fi";
-import { useLanguage } from "@/context/LanguageContext"; // BKAV HaiHS: Import hook ngôn ngữ
+import { useLanguage } from "@/context/LanguageContext";
 import { useSidebar } from "@/components/layout/AppLayout";
+import { useOutsideClick } from "@/hooks/useOutsideClick"; // BKAV HaiHS: Import hook nhận diện click ngoài phần tử
 
 // BKAV HaiHS : Component header của workspace chat, chứa trạng thái kết nối và dropdown chọn model AI - start
-const ChatHeader = ({ selectedModel, setSelectedModel }) => {
+const ChatHeader = ({ selectedModel, setSelectedModel, models = [] }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const { t } = useLanguage(); // BKAV HaiHS: Khai báo hàm dịch thuật
+  const { t } = useLanguage();
   const { setIsSidebarOpen } = useSidebar();
 
-  // Các model ai
-  const models = [
-    {
-      id: "qwen/qwen3.6-27b",
-      name: "qwen/qwen3.6-27b",
-      desc: t("model_desc_llama") || "Siêu tốc độ, tối ưu hội thoại",
-    },
-    {
-      id: "flowise",
-      name: "flowise",
-      desc: t("model_desc_flowise") || "Hệ thống AI quy trình kéo thả",
-    },
-  ];
+  // BKAV HaiHS : Đăng ký ref để tự động đóng dropdown khi click ra ngoài - start
+  const dropdownRef = useRef(null);
+  useOutsideClick(dropdownRef, () => setIsOpen(false));
+  // BKAV HaiHS : Đăng ký ref để tự động đóng dropdown khi click ra ngoài - end
 
   // Lấy tên model đang chọn để hiển thị trên nút dropdown
   const currentModelName =
-    models.find((m) => m.id === selectedModel)?.name ||
-    t("select_model") ||
-    "Chọn Model AI";
+    models.find((m) => m.id === selectedModel)?.id ||
+    selectedModel ||
+    (t("select_model") || "select_model");
+
+  // BKAV HaiHS : Hàm phụ lấy mô tả phù hợp cho từng Model ID nhận được từ Backend - start
+  const getModelDesc = (modelId) => {
+    if (modelId === "flowise") {
+      return t("model_desc_flowise") || "model_desc_flowise";
+    }
+    return t("model_desc_llama") || "model_desc_llama";
+  };
+  // BKAV HaiHS : Hàm phụ lấy mô tả phù hợp cho từng Model ID nhận được từ Backend - end
 
   return (
     <div className="h-16 border-b border-gray-200 dark:border-[#1e293b]/60 flex items-center justify-between px-6 bg-white/80 dark:bg-[#0b0f19]/80 backdrop-blur-md z-10 shrink-0 transition-colors duration-300">
@@ -35,14 +36,14 @@ const ChatHeader = ({ selectedModel, setSelectedModel }) => {
         <button
           onClick={() => setIsSidebarOpen(true)}
           className="p-2 -ml-2 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 md:hidden cursor-pointer shrink-0 transition-colors duration-300"
-          title="Mở menu"
+          title={t("open_menu") || "open_menu"}
         >
           <FiMenu size={18} />
         </button>
       </div>
 
-      {/* DROPDOWN CHỌN MODEL*/}
-      <div className="relative">
+      {/* Dropdown chọn model AI */}
+      <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="flex items-center gap-2 bg-gray-50 dark:bg-[#161b26] border border-gray-200 dark:border-[#232d42] hover:border-gray-400 dark:hover:border-gray-600 text-xs font-semibold px-4 py-2 rounded-xl transition-all text-gray-700 dark:text-gray-300 cursor-pointer"
@@ -54,7 +55,7 @@ const ChatHeader = ({ selectedModel, setSelectedModel }) => {
           />
         </button>
 
-        {isOpen && (
+        {isOpen && models.length > 0 && (
           <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-[#161b26] border border-gray-200 dark:border-[#232d42] rounded-xl shadow-2xl py-1.5 z-50 animate-fade-in transition-colors duration-300">
             {models.map((model) => (
               <button
@@ -70,10 +71,10 @@ const ChatHeader = ({ selectedModel, setSelectedModel }) => {
                 }`}
               >
                 <span className="text-xs font-bold text-gray-900 dark:text-white transition-colors duration-300">
-                  {model.name}
+                  {model.id}
                 </span>
                 <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 transition-colors duration-300">
-                  {model.desc}
+                  {getModelDesc(model.id)}
                 </span>
               </button>
             ))}
