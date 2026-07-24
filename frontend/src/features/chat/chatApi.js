@@ -19,7 +19,8 @@ export const getConversationDetailApi = async (id) => {
 
 // BKAV HaiHS : Tạo mới một hội thoại - start
 export const createConversationApi = async (payload) => {
-  const response = await apiClient.post("/conversations", payload);
+  const body = typeof payload === "string" ? { title: payload } : payload;
+  const response = await apiClient.post("/conversations", body);
   return response.data;
 };
 // BKAV HaiHS : Tạo mới một hội thoại - end
