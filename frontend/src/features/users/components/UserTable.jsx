@@ -1,33 +1,19 @@
-import React, { useState, useRef } from "react";
+import React from "react";
 import { FiInfo, FiEdit2, FiTrash2 } from "react-icons/fi";
-import { useLanguage } from "@/context/LanguageContext"; // BKAV HaiHS: Import hook ngôn ngữ
+import { useLanguage } from "@/context/LanguageContext";
+import TruncatedText from "@/components/TruncatedText";
 
-// Helper component to conditionally show title on hover only when text overflows (is truncated)
-const TruncatedText = ({ text, className, maxWClass }) => {
-  const [showTitle, setShowTitle] = useState(false);
-  const textRef = useRef(null);
+// BKAV HaiHS : Hàm thuần lấy tên hiển thị của người dùng - start
+const getNameDisplay = (user) =>
+  user?.fullname || user?.email?.split("@")[0] || "Unknown";
+// BKAV HaiHS : Hàm thuần lấy tên hiển thị của người dùng - end
 
-  const handleMouseEnter = () => {
-    const el = textRef.current;
-    if (el) {
-      const isOverflowing = el.scrollWidth > el.clientWidth;
-      setShowTitle(isOverflowing);
-    }
-  };
+// BKAV HaiHS : Hàm thuần tạo mã avatar từ ký tự đầu của email người dùng - start
+const getAvatarCode = (user) =>
+  user?.email ? user.email.substring(0, 2).toUpperCase() : "US";
+// BKAV HaiHS : Hàm thuần tạo mã avatar từ ký tự đầu của email người dùng - end
 
-  return (
-    <span
-      ref={textRef}
-      onMouseEnter={handleMouseEnter}
-      title={showTitle ? text : undefined}
-      className={`truncate block ${maxWClass} ${className || ""}`}
-    >
-      {text}
-    </span>
-  );
-};
-
-// BKAV HaiHS: Component bang hien thi nhan su don nhan cac trang thai chon tu Bo chi huy trung tam - start
+// BKAV HaiHS: Component bảng hiển thị danh sách người dùng - start
 const UserTable = ({
   users,
   isLoading,
@@ -42,8 +28,9 @@ const UserTable = ({
   canDelete,
   onBulkGroupClick,
 }) => {
-  const { t } = useLanguage(); // BKAV HaiHS: Khai báo hàm dịch thuật
+  const { t } = useLanguage();
 
+  // BKAV HaiHS : Bật/tắt chọn tất cả người dùng trên trang hiện tại - start
   const handleSelectAllToggle = (e) => {
     if (e.target.checked) {
       setSelectedUsers((prev) => {
@@ -55,7 +42,9 @@ const UserTable = ({
       setSelectedUsers((prev) => prev.filter((u) => !currentIds.includes(u.id)));
     }
   };
+  // BKAV HaiHS : Bật/tắt chọn tất cả người dùng trên trang hiện tại - end
 
+  // BKAV HaiHS : Bật/tắt chọn một dòng người dùng - start
   const handleSelectRowToggle = (user) => {
     setSelectedUsers((prev) =>
       prev.some((u) => u.id === user.id)
@@ -63,13 +52,14 @@ const UserTable = ({
         : [...prev, user],
     );
   };
+  // BKAV HaiHS : Bật/tắt chọn một dòng người dùng - end
 
   const isAllSelectedOnPage =
     users.length > 0 && users.every((user) => selectedUsers.some((u) => u.id === user.id));
 
   return (
     <div className="w-full bg-white dark:bg-[#161b26]/60 border border-gray-200 dark:border-[#232d42] rounded-2xl overflow-hidden shadow-xl dark:shadow-2xl backdrop-blur-md transition-colors duration-300">
-      {/* THANH TAC VU HANG LOAT */}
+      {/* thanh tác vụ hàng loạt */}
       {canRead && (
         <div className="px-6 h-[52px] bg-gray-50 dark:bg-[#111622]/90 border-b border-gray-200 dark:border-[#232d42] flex items-center justify-between text-xs font-semibold tracking-wider text-gray-500 dark:text-gray-400 select-none transition-colors duration-300">
           <div className="flex items-center gap-3">
@@ -86,7 +76,7 @@ const UserTable = ({
                   : ""
               }
             >
-              {selectedUsers.length} {t("users_selected") || "Users selected"}
+              {selectedUsers.length} {t("users_selected") || "users_selected"}
             </span>
           </div>
 
@@ -97,14 +87,14 @@ const UserTable = ({
                 onClick={() => setSelectedUsers([])}
                 className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white font-semibold text-[10px] tracking-wider uppercase cursor-pointer transition-all"
               >
-                {t("deselect_all") || "Bỏ chọn tất cả"}
+                {t("deselect_all") || "deselect_all"}
               </button>
               <button
                 type="button"
                 onClick={onBulkGroupClick}
                 className="bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-xl font-bold text-[10px] tracking-wider uppercase hover:bg-blue-100 dark:hover:bg-blue-600/20 transition-all cursor-pointer"
               >
-                + {t("add_to_group") || "Add to Group"}
+                + {t("add_to_group") || "add_to_group"}
               </button>
               {canDelete && (
                 <button
@@ -112,7 +102,7 @@ const UserTable = ({
                   onClick={onBulkDeleteClick}
                   className="text-red-600 dark:text-red-400 hover:text-red-700 font-bold text-[10px] tracking-wider uppercase cursor-pointer transition-all"
                 >
-                  {t("delete_selected") || "Delete Selected"}
+                  {t("delete_selected") || "delete_selected"}
                 </button>
               )}
             </div>
@@ -125,11 +115,11 @@ const UserTable = ({
           <thead>
             <tr className="border-b border-gray-200 dark:border-[#232d42] text-[11px] font-bold tracking-widest text-gray-500 uppercase select-none transition-colors duration-300">
               <th className="py-4 px-6 w-12"></th>
-              <th className="py-4 px-6">{t("name") || "Name"}</th>
-              <th className="py-4 px-6">{t("email") || "Email"}</th>
+              <th className="py-4 px-6">{t("name") || "name"}</th>
+              <th className="py-4 px-6">{t("email") || "email"}</th>
               {(canRead || canUpdate || canDelete) && (
                 <th className="py-4 px-6 text-right pr-8">
-                  {t("action") || "Actions"}
+                  {t("action") || "action"}
                 </th>
               )}
             </tr>
@@ -160,7 +150,7 @@ const UserTable = ({
                   colSpan={4}
                   className="py-12 text-center text-amber-600 dark:text-amber-500/80 italic font-medium bg-amber-50 dark:bg-[#111622]/20"
                 >
-                  {t("user_no_permission")}
+                  {t("user_no_permission") || "user_no_permission"}
                 </td>
               </tr>
             ) : users.length === 0 ? (
@@ -169,16 +159,11 @@ const UserTable = ({
                   colSpan={4}
                   className="py-12 text-center text-gray-500 italic"
                 >
-                  {t("user_empty")}
+                  {t("user_empty") || "user_empty"}
                 </td>
               </tr>
             ) : (
               users.map((user) => {
-                const nameDisplay =
-                  user.fullname || user.email?.split("@")[0] || "Unknown";
-                const avatarCode = user.email
-                  ? user.email.substring(0, 2).toUpperCase()
-                  : "US";
                 const isRowChecked = selectedUsers.some((u) => u.id === user.id);
 
                 return (
@@ -202,10 +187,10 @@ const UserTable = ({
                     </td>
                     <td className="py-4 px-6 font-semibold text-gray-900 dark:text-white flex items-center gap-3 transition-colors">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-gray-200 to-gray-300 dark:from-blue-600/20 dark:to-indigo-600/20 border border-gray-200 dark:border-blue-500/20 flex justify-center items-center text-xs font-bold text-blue-600 dark:text-blue-400">
-                        {avatarCode}
+                        {getAvatarCode(user)}
                       </div>
                       <TruncatedText
-                        text={nameDisplay}
+                        text={getNameDisplay(user)}
                         className="capitalize"
                         maxWClass="max-w-[150px] sm:max-w-[200px]"
                       />
@@ -262,6 +247,6 @@ const UserTable = ({
     </div>
   );
 };
-// BKAV HaiHS: Component bang hien thi nhan su don nhan cac trang thai chon tu Bo chi huy trung tam - end
+// BKAV HaiHS: Component bảng hiển thị danh sách người dùng - end
 
 export default UserTable;

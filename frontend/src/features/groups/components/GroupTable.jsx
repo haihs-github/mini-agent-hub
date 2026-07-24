@@ -1,46 +1,12 @@
-import React, { useState, useRef } from "react";
+import React from "react";
 import { FiInfo, FiUsers, FiEdit2, FiTrash2 } from "react-icons/fi";
 import { useLanguage } from "@/context/LanguageContext";
+import TruncatedText from "@/components/TruncatedText";
 
 // BKAV HaiHS : Hàm thuần lấy số lượng thành viên từ nhiều cấu trúc dữ liệu khác nhau - start
 const getMemberCount = (group) =>
   group.memberCount || group._count?.users || 0;
 // BKAV HaiHS : Hàm thuần lấy số lượng thành viên từ nhiều cấu trúc dữ liệu khác nhau - end
-
-// BKAV HaiHS : Component con hiển thị tooltip khi văn bản bị cắt ngắn do tràn chiều rộng - start
-const TruncatedText = ({
-  text,
-  className,
-  maxWClass,
-  onClick,
-  showUnderline = true,
-}) => {
-  const [showTitle, setShowTitle] = useState(false);
-  const textRef = useRef(null);
-
-  // BKAV HaiHS : Kiểm tra tràn chiều rộng khi di chuột vào để quyết định hiện tooltip - start
-  const handleMouseEnter = () => {
-    const el = textRef.current;
-    if (el) {
-      const isOverflowing = el.scrollWidth > el.clientWidth;
-      setShowTitle(isOverflowing);
-    }
-  };
-  // BKAV HaiHS : Kiểm tra tràn chiều rộng khi di chuột vào để quyết định hiện tooltip - end
-
-  return (
-    <span
-      ref={textRef}
-      onMouseEnter={handleMouseEnter}
-      title={showTitle ? text : undefined}
-      onClick={onClick}
-      className={`truncate block cursor-pointer ${showUnderline ? "hover:underline" : ""} ${maxWClass} ${className || ""}`}
-    >
-      {text}
-    </span>
-  );
-};
-// BKAV HaiHS : Component con hiển thị tooltip khi văn bản bị cắt ngắn do tràn chiều rộng - end
 
 // BKAV HaiHS: Component bảng hiển thị danh sách nhóm - start
 const GroupTable = ({
