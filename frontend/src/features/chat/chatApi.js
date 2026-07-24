@@ -1,54 +1,60 @@
 // file này chứa các hàm gọi api liên quan đến Chat và hội thoại
 import apiClient from "@/services/apiClient";
 
-//BKAS HaiHS : Lấy danh sách hội thoại phân trang - start
+// BKAV HaiHS : Lấy danh sách hội thoại phân trang - start
 export const getConversationsApi = async (page = 1, limit = 20) => {
   const response = await apiClient.get(
     `/conversations?page=${page}&limit=${limit}`,
   );
-  console.log("API Response for getConversationsApi:", response.data); // Log dữ liệu trả về từ API
   return response.data;
 };
-//BKAS HaiHS : Lấy danh sách hội thoại phân trang - end
+// BKAV HaiHS : Lấy danh sách hội thoại phân trang - end
 
-//BKAS HaiHS : Lấy chi tiết tin nhắn của 1 hội thoại - start
+// BKAV HaiHS : Lấy chi tiết tin nhắn của 1 hội thoại - start
 export const getConversationDetailApi = async (id) => {
   const response = await apiClient.get(`/conversations/${id}`);
   return response.data;
 };
-//BKAS HaiHS : Lấy chi tiết tin nhắn của 1 hội thoại - end
+// BKAV HaiHS : Lấy chi tiết tin nhắn của 1 hội thoại - end
 
-// BKAV HaiHS : Tạo hội thoại mới (Khi gửi prompt đầu tiên) - start
-export const createConversationApi = async (title) => {
-  const response = await apiClient.post("/conversations", { title });
+// BKAV HaiHS : Tạo mới một hội thoại - start
+export const createConversationApi = async (payload) => {
+  const response = await apiClient.post("/conversations", payload);
   return response.data;
 };
-// BKAV HaiHS : Tạo hội thoại mới (Khi gửi prompt đầu tiên) - end
+// BKAV HaiHS : Tạo mới một hội thoại - end
 
-// BKAV HaiHS : Sửa tên cuộc hội thoại - start
-export const updateConversationTitleApi = async (id, title) => {
-  const response = await apiClient.put(`/conversations/${id}`, { title });
+// BKAV HaiHS : Lấy danh sách các mô hình AI hỗ trợ - start
+export const getAiModelsApi = async () => {
+  const response = await apiClient.get("/ai/models");
   return response.data;
 };
-// BKAV HaiHS : Sửa tên cuộc hội thoại - end
+// BKAV HaiHS : Lấy danh sách các mô hình AI hỗ trợ - end
 
-// BKAV HaiHS : Xóa hội thoại - start
+// BKAV HaiHS : Xóa 1 hội thoại - start
 export const deleteConversationApi = async (id) => {
   const response = await apiClient.delete(`/conversations/${id}`);
   return response.data;
 };
-// BKAV HaiHS : Xóa hội thoại - end
+// BKAV HaiHS : Xóa 1 hội thoại - end
 
-// BKAV HaiHS: API xóa toàn bộ các cuộc hội thoại của tài khoản - start
+// BKAV HaiHS : Xóa toàn bộ lịch sử chat - start
 export const clearAllChatHistoryApi = async () => {
   const response = await apiClient.delete("/conversations");
   return response.data;
 };
-// BKAV HaiHS: API xóa toàn bộ các cuộc hội thoại của tài khoản - end
+// BKAV HaiHS : Xóa toàn bộ lịch sử chat - end
 
-// BKAV HaiHS : Lấy danh sách các model AI đang hoạt động từ Backend - start
-export const getAiModelsApi = async () => {
-  const response = await apiClient.get("/conversations/models");
+// BKAV HaiHS : Đổi tên tiêu đề hội thoại - start
+export const updateConversationTitleApi = async (id, title) => {
+  const response = await apiClient.patch(`/conversations/${id}`, { title });
   return response.data;
 };
-// BKAV HaiHS : Lấy danh sách các model AI đang hoạt động từ Backend - end
+// BKAV HaiHS : Đổi tên tiêu đề hội thoại - end
+
+// BKAV HaiHS : Dừng tạo phản hồi AI cho hội thoại đang phát - start
+export const abortConversationApi = async (id) => {
+  const response = await apiClient.post(`/conversations/${id}/abort`);
+  return response.data;
+};
+// BKAV HaiHS : Dừng tạo phản hồi AI cho hội thoại đang phát - end

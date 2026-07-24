@@ -408,9 +408,7 @@ export const useChatStream = (initialActiveId = "new-chat") => {
         setMessages((prev) => prev.filter((msg) => msg.id !== userMsgId));
       }
 
-      if (err.name === "AbortError") {
-        console.log("Người dùng chủ động nhấn dừng Stream.");
-      } else {
+      if (err.name !== "AbortError") {
         console.error("Lỗi trong quá trình đọc Stream chữ chạy:", err);
       }
       // BKAV HaiHS : Dam bao set isStreaming cua tin nhan assistant cuoi cung thanh false khi loi hoac dung - start
@@ -572,10 +570,7 @@ export const useChatStream = (initialActiveId = "new-chat") => {
   };
 
   const handleStreamException = (err) => {
-    if (err.name === "AbortError") {
-      console.log("Người dùng chủ động nhấn dừng Stream.");
-      return;
-    }
+    if (err.name === "AbortError") return;
     console.error("Lỗi trong quá trình kết nối lại Stream:", err);
   };
 

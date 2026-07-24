@@ -24,9 +24,12 @@ class RedisStreamService {
       this.#setupConnectionListeners(this.ioredisClient);
 
       this.subscriberClient = new Redis(redisConfig);
-      this.subscriberClient.on("error", () => {});
+      this.subscriberClient.on("error", (err) => {
+        console.warn(`[RedisStream] Lỗi kết nối Subscriber Client: ${err.message}`);
+      });
     } catch (e) {
       this.isRedisConnected = false;
+      console.warn(`[RedisStream] Không thể khởi tạo kết nối Redis, chuyển sang RAM mode: ${e.message}`);
     }
   }
 
@@ -41,7 +44,9 @@ class RedisStreamService {
         const results = await pipeline.exec();
         const seq = results[0][1];
         return seq - 1;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi getNextSequence Redis (${streamId}), dùng fallback RAM: ${e.message}`);
+      }
     }
     return this.#fallbackSequence(streamId);
   }
@@ -57,7 +62,9 @@ class RedisStreamService {
         pipeline.expire(streamKey, 1200);
         await pipeline.exec();
         return;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi appendChunk Redis (${streamId}), dùng fallback RAM: ${e.message}`);
+      }
     }
 
     if (!this.memoryStreams.has(streamId)) {
@@ -74,7 +81,9 @@ class RedisStreamService {
       try {
         await this.ioredisClient.publish(channel, JSON.stringify(event));
         return;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi publishChunk Redis (${streamId}), dùng fallback RAM: ${e.message}`);
+      }
     }
     this.#fallbackPublishChunk(channel, event);
   }
@@ -91,7 +100,9 @@ class RedisStreamService {
             try {
               const event = JSON.parse(message);
               callback(event);
-            } catch (e) {}
+            } catch (e) {
+              console.warn(`[RedisStream] Lỗi parse JSON message từ channel (${channel}): ${e.message}`);
+            }
           }
         };
         this.subscriberClient.on("message", handler);
@@ -99,9 +110,13 @@ class RedisStreamService {
           this.subscriberClient.off("message", handler);
           try {
             await this.subscriberClient.unsubscribe(channel);
-          } catch (e) {}
+          } catch (e) {
+            console.warn(`[RedisStream] Lỗi unsubscribe channel (${channel}): ${e.message}`);
+          }
         };
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi subscribeToChannel Redis (${streamId}), dùng fallback RAM: ${e.message}`);
+      }
     }
     return this.#fallbackSubscribe(channel, callback);
   }
@@ -114,7 +129,9 @@ class RedisStreamService {
       try {
         const exists = await this.ioredisClient.exists(streamKey);
         return exists === 1;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi hasStream Redis (${streamId}), dùng fallback RAM: ${e.message}`);
+      }
     }
     return this.memoryStreams.has(streamId);
   }
@@ -133,12 +150,16 @@ class RedisStreamService {
             if (fields[i] === "data") {
               try {
                 events.push(JSON.parse(fields[i + 1]));
-              } catch (e) {}
+              } catch (e) {
+                console.warn(`[RedisStream] Lỗi parse JSON event chunk từ Redis: ${e.message}`);
+              }
             }
           }
         }
         return events;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi getChunks Redis (${streamId}), dùng fallback RAM: ${e.message}`);
+      }
     }
 
     return this.memoryStreams.get(streamId) || [];
@@ -154,7 +175,9 @@ class RedisStreamService {
           channel,
           JSON.stringify({ type: AISERVICE.STREAM_EVENTS.ABORT }),
         );
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi publishAbort Redis (${streamId}): ${e.message}`);
+      }
     }
   }
   // BKAV HaiHS : Phát tín hiệu hủy bằng pub/sub - end
@@ -166,7 +189,9 @@ class RedisStreamService {
       try {
         await this.ioredisClient.set(activeKey, "1", "EX", 1200);
         return;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi setStreamActive Redis (${streamId}), dùng fallback RAM: ${e.message}`);
+      }
     }
     this.memoryActiveFlags.add(streamId);
   }
@@ -179,7 +204,9 @@ class RedisStreamService {
       try {
         await this.ioredisClient.del(activeKey);
         return;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi clearStreamActive Redis (${streamId}), dùng fallback RAM: ${e.message}`);
+      }
     }
     this.memoryActiveFlags.delete(streamId);
   }
@@ -195,7 +222,9 @@ class RedisStreamService {
           this.ioredisClient.exists(`stream:${streamId}:chunks`),
         ]);
         return activeExists === 1 || streamExists === 1;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi isStreamActive Redis (${streamId}), dùng fallback RAM: ${e.message}`);
+      }
     }
     return (
       this.memoryActiveFlags.has(streamId) || this.memoryStreams.has(streamId)
@@ -213,7 +242,9 @@ class RedisStreamService {
       try {
         await this.ioredisClient.del(streamKey, seqKey, activeKey);
         return;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi deleteStream Redis (${streamId}), dùng fallback RAM: ${e.message}`);
+      }
     }
     this.memoryStreams.delete(streamId);
     this.memoryActiveFlags.delete(streamId);
@@ -225,7 +256,9 @@ class RedisStreamService {
     if (this.isRedisConnected) {
       try {
         return await this.ioredisClient.get(key);
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi cacheGet Redis (${key}), dùng fallback RAM: ${e.message}`);
+      }
     }
     return this.#fallbackCacheGet(key);
   }
@@ -235,7 +268,9 @@ class RedisStreamService {
       try {
         await this.ioredisClient.set(key, value, "EX", ttlSeconds);
         return;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi cacheSet Redis (${key}), dùng fallback RAM: ${e.message}`);
+      }
     }
     this.#fallbackCacheSet(key, value, ttlSeconds);
   }
@@ -245,7 +280,9 @@ class RedisStreamService {
       try {
         await this.ioredisClient.del(key);
         return;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi cacheDel Redis (${key}), dùng fallback RAM: ${e.message}`);
+      }
     }
     this.memoryCache.delete(key);
   }
@@ -258,7 +295,9 @@ class RedisStreamService {
           await this.ioredisClient.del(...keys);
         }
         return;
-      } catch (e) {}
+      } catch (e) {
+        console.warn(`[RedisStream] Lỗi cacheDelPattern Redis (${pattern}), dùng fallback RAM: ${e.message}`);
+      }
     }
     this.#clearMemoryCacheByPattern(pattern);
   }
@@ -269,8 +308,9 @@ class RedisStreamService {
     client.on("connect", () => {
       this.isRedisConnected = true;
     });
-    client.on("error", () => {
+    client.on("error", (err) => {
       this.isRedisConnected = false;
+      console.warn(`[RedisStream] Sự cố kết nối Redis Client: ${err.message}`);
     });
   }
   // BKAV HaiHS : Hàm phụ đăng ký lắng nghe sự kiện kết nối của Redis Client - end
@@ -290,7 +330,9 @@ class RedisStreamService {
       for (const cb of handlers) {
         try {
           cb(event);
-        } catch (e) {}
+        } catch (e) {
+          console.warn(`[RedisStream] Lỗi thực thi callback fallbackPublishChunk (${channel}): ${e.message}`);
+        }
       }
     }
   }
@@ -298,49 +340,52 @@ class RedisStreamService {
 
   // BKAV HaiHS : Hàm phụ đăng ký nhận sự kiện cục bộ - start
   #fallbackSubscribe(channel, callback) {
-    const handlers = this.memorySubscribers.get(channel) || new Set();
-    handlers.add(callback);
-    this.memorySubscribers.set(channel, handlers);
-    return async () => {
-      handlers.delete(callback);
-      if (handlers.size === 0) this.memorySubscribers.delete(channel);
+    if (!this.memorySubscribers.has(channel)) {
+      this.memorySubscribers.set(channel, new Set());
+    }
+    this.memorySubscribers.get(channel).add(callback);
+
+    return () => {
+      const handlers = this.memorySubscribers.get(channel);
+      if (handlers) {
+        handlers.delete(callback);
+        if (handlers.size === 0) {
+          this.memorySubscribers.delete(channel);
+        }
+      }
     };
   }
   // BKAV HaiHS : Hàm phụ đăng ký nhận sự kiện cục bộ - end
 
-  // BKAV HaiHS : Hàm phụ đọc dữ liệu cache từ RAM - start
+  // BKAV HaiHS : Hàm phụ lấy dữ liệu từ cache RAM - start
   #fallbackCacheGet(key) {
     const item = this.memoryCache.get(key);
-    if (item) {
-      if (item.expiresAt && item.expiresAt < Date.now()) {
-        this.memoryCache.delete(key);
-        return null;
-      }
-      return item.value;
+    if (!item) return null;
+    if (Date.now() > item.expiresAt) {
+      this.memoryCache.delete(key);
+      return null;
     }
-    return null;
+    return item.value;
   }
-  // BKAV HaiHS : Hàm phụ đọc dữ liệu cache từ RAM - end
+  // BKAV HaiHS : Hàm phụ lấy dữ liệu từ cache RAM - end
 
-  // BKAV HaiHS : Hàm phụ ghi dữ liệu cache vào RAM - start
+  // BKAV HaiHS : Hàm phụ ghi dữ liệu vào cache RAM có thời gian sống TTL - start
   #fallbackCacheSet(key, value, ttlSeconds) {
-    const expiresAt = ttlSeconds ? Date.now() + ttlSeconds * 1000 : null;
+    const expiresAt = Date.now() + ttlSeconds * 1000;
     this.memoryCache.set(key, { value, expiresAt });
   }
-  // BKAV HaiHS : Hàm phụ ghi dữ liệu cache vào RAM - end
+  // BKAV HaiHS : Hàm phụ ghi dữ liệu vào cache RAM có thời gian sống TTL - end
 
-  // BKAV HaiHS : Hàm phụ tìm kiếm và xóa cache RAM hàng loạt bằng biểu thức - start
+  // BKAV HaiHS : Hàm phụ xóa cache RAM theo pattern - start
   #clearMemoryCacheByPattern(pattern) {
-    const escapedPattern = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp("^" + escapedPattern.replace(/\*/g, ".*") + "$");
+    const regexPattern = new RegExp("^" + pattern.replace(/\*/g, ".*") + "$");
     for (const key of this.memoryCache.keys()) {
-      if (regex.test(key)) {
+      if (regexPattern.test(key)) {
         this.memoryCache.delete(key);
       }
     }
   }
-  // BKAV HaiHS : Hàm phụ tìm kiếm và xóa cache RAM hàng loạt bằng biểu thức - end
+  // BKAV HaiHS : Hàm phụ xóa cache RAM theo pattern - end
 }
-// BKAV HaiHS : Định nghĩa lớp RedisStreamService điều hành việc đồng bộ hóa dữ liệu chéo máy chủ qua Redis - end
 
 module.exports = new RedisStreamService();
