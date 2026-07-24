@@ -7,13 +7,13 @@ import { clearAllChatHistoryApi } from "@/features/chat/chatApi";
 import { deleteAccountApi } from "@/features/users/userApi";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/features/auth/AuthContext";
-import { useLanguage } from "@/context/LanguageContext"; // BKAV HaiHS: Import hook ngôn ngữ
+import { useLanguage } from "@/context/LanguageContext";
 
 // BKAV HaiHS: Component bảo mật tài khoản - start
 const AccountSecurity = ({ setConversations }) => {
   const { showToast } = useToast();
   const { logout } = useAuth();
-  const { t, tError } = useLanguage(); // BKAV HaiHS: Khai báo hàm dịch thuật
+  const { t, tError } = useLanguage();
 
   const navigate = useNavigate();
 
@@ -25,6 +25,7 @@ const AccountSecurity = ({ setConversations }) => {
   const [isClearing, setIsClearing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // BKAV HaiHS : Xóa toàn bộ lịch sử hội thoại của tài khoản hiện tại - start
   const handleExecuteClearHistory = async () => {
     setIsClearing(true);
     try {
@@ -38,14 +39,16 @@ const AccountSecurity = ({ setConversations }) => {
       setIsClearModalOpen(false);
     }
   };
+  // BKAV HaiHS : Xóa toàn bộ lịch sử hội thoại của tài khoản hiện tại - end
 
+  // BKAV HaiHS : Xóa vĩnh viễn tài khoản rồi điều hướng về trang đăng nhập - start
   const handleExecuteDeleteAccount = async () => {
     setIsDeleting(true);
     try {
       await deleteAccountApi();
       showToast(t("toast_delete_acc_success"), "success");
-      logout();
       navigate("/");
+      await logout();
     } catch (err) {
       showToast(tError(err), "error");
     } finally {
@@ -53,12 +56,14 @@ const AccountSecurity = ({ setConversations }) => {
       setIsDeleteModalOpen(false);
     }
   };
+  // BKAV HaiHS : Xóa vĩnh viễn tài khoản rồi điều hướng về trang đăng nhập - end
 
-  const handleExecuteSignOut = () => {
-    logout();
+  // BKAV HaiHS : Đăng xuất tài khoản và điều hướng về trang đăng nhập - start
+  const handleExecuteSignOut = async () => {
     navigate("/");
-    setIsSignOutModalOpen(false);
+    await logout();
   };
+  // BKAV HaiHS : Đăng xuất tài khoản và điều hướng về trang đăng nhập - end
 
   return (
     <div className="space-y-4 animate-fade-in select-none">
@@ -68,7 +73,7 @@ const AccountSecurity = ({ setConversations }) => {
       </div>
 
       <div className="bg-white dark:bg-[#161b26] border border-gray-200 dark:border-[#232d42] rounded-2xl p-5 divide-y divide-gray-100 dark:divide-[#232d42]/60 shadow-xl transition-colors duration-300">
-        {/* ROW 1: PASSWORD & SECURITY */}
+        {/* row đổi mật khẩu */}
         <div className="flex items-center justify-between py-4 first:pt-1 last:pb-1 group">
           <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
             <div className="w-10 h-10 rounded-xl bg-gray-50 dark:bg-[#0b0f19] border border-gray-200 dark:border-[#232d42] flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 shadow-inner transition-colors duration-300">
@@ -92,7 +97,7 @@ const AccountSecurity = ({ setConversations }) => {
           </button>
         </div>
 
-        {/* ROW 2: CLEAR CHAT HISTORY */}
+        {/* row xóa lịch sử chat */}
         <div className="flex items-center justify-between py-4 first:pt-1 last:pb-1 group">
           <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
             <div className="w-10 h-10 rounded-xl bg-gray-50 dark:bg-[#0b0f19] border border-gray-200 dark:border-[#232d42] flex items-center justify-center text-orange-600 dark:text-orange-400 shrink-0 shadow-inner transition-colors duration-300">
@@ -118,7 +123,7 @@ const AccountSecurity = ({ setConversations }) => {
           </button>
         </div>
 
-        {/* ROW 3: DELETE ACCOUNT */}
+        {/* row xóa tài khoản */}
         <div className="flex items-center justify-between py-4 first:pt-1 last:pb-1 group">
           <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
             <div className="w-10 h-10 rounded-xl bg-gray-50 dark:bg-[#0b0f19] border border-gray-200 dark:border-[#232d42] flex items-center justify-center text-red-600 dark:text-red-400 shrink-0 shadow-inner transition-colors duration-300">
@@ -144,7 +149,7 @@ const AccountSecurity = ({ setConversations }) => {
           </button>
         </div>
 
-        {/* ROW 4: SIGN OUT */}
+        {/* row đăng xuất */}
         <div className="flex items-center justify-between py-4 first:pt-1 last:pb-1 group">
           <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
             <div className="w-10 h-10 rounded-xl bg-gray-50 dark:bg-[#0b0f19] border border-gray-200 dark:border-[#232d42] flex items-center justify-center text-gray-500 dark:text-gray-400 shrink-0 shadow-inner transition-colors duration-300">
