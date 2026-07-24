@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { FiX, FiCpu, FiLoader } from "react-icons/fi";
-import { useToast } from "@/components/Toast";
-import { createGroupApi, updateGroupApi, searchUsersApi } from "@/features/groups/groupApi";
+import React from "react";
+import { FiX, FiLoader } from "react-icons/fi";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useLanguage } from "@/context/LanguageContext";
+import { useGroupFormModal } from "@/features/groups/hooks/useGroupFormModal";
 
 // BKAV HaiHS: Component Tạo mới, Sửa đổi và Xem chi tiết nhóm quyền - start
 const GroupFormModal = ({
@@ -15,224 +14,33 @@ const GroupFormModal = ({
 }) => {
   if (!isOpen) return null;
 
-  const { showToast } = useToast();
-  const { t, tError } = useLanguage();
-  const isEditMode = !!groupToEdit;
+  const { t } = useLanguage();
 
-  const [name, setName] = useState("");
-  const [selectedPermissions, setSelectedPermissions] = useState([]);
-  const [members, setMembers] = useState([]);
-  const [activeTab, setActiveTab] = useState("user");
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isConfirmCancelOpen, setIsConfirmCancelOpen] = useState(false);
-
-  const [searchKeyword, setSearchKeyword] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchPage, setSearchPage] = useState(1);
-  const [searchHasMore, setSearchHasMore] = useState(true);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-
-  const searchRef = useRef(null);
-  const searchTimeoutRef = useRef(null);
-
-  const userMatrix = [
-    { id: "USER_C", action: t("act_create"), desc: t("desc_new_res") },
-    { id: "USER_R", action: t("act_read"), desc: t("desc_res_data") },
-    { id: "USER_U", action: t("act_update"), desc: t("desc_edit_content") },
-    { id: "USER_D", action: t("act_delete"), desc: t("desc_remove_assets") },
-  ];
-
-  const groupMatrix = [
-    { id: "GROUP_C", action: t("act_create"), desc: t("desc_new_groups") },
-    { id: "GROUP_R", action: t("act_read"), desc: t("desc_group_data") },
-    { id: "GROUP_U", action: t("act_update"), desc: t("desc_edit_group") },
-    { id: "GROUP_D", action: t("act_delete"), desc: t("desc_delete_group") },
-    {
-      id: "GROUP_ADD_USER",
-      action: t("act_add_user"),
-      desc: t("desc_add_bulk"),
-    },
-    {
-      id: "GROUP_DELETE_USER",
-      action: t("act_del_user"),
-      desc: t("desc_del_bulk"),
-    },
-  ];
-
-  // Kiểm tra xem dữ liệu trong form có thay đổi so với ban đầu không (dirty check)
-  const originalMembers = groupToEdit?.users || groupToEdit?.members || [];
-  const hasChanges = isEditMode
-    ? name.trim() !== (groupToEdit?.name || "") ||
-      selectedPermissions.length !== (groupToEdit?.permissions?.length || 0) ||
-      selectedPermissions.some((p) => !groupToEdit?.permissions?.includes(p)) ||
-      members.length !== originalMembers.length ||
-      members.some((m) => !originalMembers.some((om) => om.id === m.id))
-    : name.trim() || selectedPermissions.length > 0 || members.length > 0;
-
-
-
-  useEffect(() => {
-    if ((isEditMode || isViewMode) && groupToEdit) {
-      setName(groupToEdit.name || "");
-      setSelectedPermissions(groupToEdit.permissions || []);
-      setMembers(groupToEdit.users || groupToEdit.members || []);
-    } else {
-      setName("");
-      setSelectedPermissions([]);
-      setMembers([]);
-    }
-    setActiveTab("user");
-    setSearchKeyword("");
-    setSearchResults([]);
-  }, [groupToEdit, isEditMode, isViewMode, isOpen]);
-
-  // Reset trạng thái khi đóng modal để không bị lưu trạng thái cũ cho lần mở tiếp theo
-  useEffect(() => {
-    if (!isOpen) {
-      setIsConfirmCancelOpen(false);
-      setIsDropdownOpen(false);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (isViewMode) return;
-    const handleOutsideClick = (e) => {
-      if (searchRef.current && !searchRef.current.contains(e.target)) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, [isViewMode]);
-
-  const executeSearch = useCallback(
-    async (keyword, pageNum = 1, isLoadMore = false) => {
-      if (!keyword.trim() || isViewMode) {
-        setSearchResults([]);
-        setIsDropdownOpen(false);
-        return;
-      }
-      setIsSearching(true);
-      try {
-        const res = await searchUsersApi(keyword, pageNum, 10);
-        const fetchedUsers = res?.data || [];
-        const pagination = res?.pagination || {};
-
-        if (isLoadMore) {
-          setSearchResults((prev) => [...prev, ...fetchedUsers]);
-        } else {
-          setSearchResults(fetchedUsers);
-          setIsDropdownOpen(true);
-        }
-        setSearchPage(pageNum);
-        setSearchHasMore(pageNum < (pagination.totalPages || 1));
-      } catch (err) {
-        console.error("Lỗi search:", err);
-      } finally {
-        setIsSearching(false);
-      }
-    },
-    [isViewMode],
-  );
-
-  useEffect(() => {
-    if (isViewMode) return;
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    if (!searchKeyword.trim()) {
-      setSearchResults([]);
-      setIsDropdownOpen(false);
-      return;
-    }
-    searchTimeoutRef.current = setTimeout(() => {
-      setSearchHasMore(true);
-      executeSearch(searchKeyword, 1, false);
-    }, 500);
-    return () => clearTimeout(searchTimeoutRef.current);
-  }, [searchKeyword, executeSearch, isViewMode]);
-
-  const handleSearchScroll = (e) => {
-    const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
-    if (
-      scrollHeight - scrollTop <= clientHeight + 5 &&
-      searchHasMore &&
-      !isSearching
-    ) {
-      executeSearch(searchKeyword, searchPage + 1, true);
-    }
-  };
-
-  const handleSelectUser = (user) => {
-    if (isViewMode) return;
-    if (members.some((m) => m.id === user.id)) {
-      showToast(t("toast_user_exist"), "warning");
-    } else {
-      setMembers((prev) => [
-        ...prev,
-        { id: user.id, fullname: user.fullname, email: user.email },
-      ]);
-    }
-    setSearchKeyword("");
-    setSearchResults([]);
-    setIsDropdownOpen(false);
-  };
-
-  const handleRemoveMember = (userId) => {
-    if (isViewMode) return;
-    setMembers((prev) => prev.filter((m) => m.id !== userId));
-  };
-
-  const handleTogglePermission = (permId) => {
-    if (isViewMode) return;
-    setSelectedPermissions((prev) =>
-      prev.includes(permId)
-        ? prev.filter((p) => p !== permId)
-        : [...prev, permId],
-    );
-  };
-
-  const handleCancelWithCheck = () => {
-    if (isViewMode) {
-      onClose();
-      return;
-    }
-    if (hasChanges) {
-      setIsConfirmCancelOpen(true);
-    } else {
-      onClose();
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (isViewMode || !name.trim() || isSubmitting) return;
-
-    setIsSubmitting(true);
-    const payload = {
-      name: name.trim(),
-      permissions: selectedPermissions,
-      userIds: members.map((m) => m.id),
-    };
-
-    try {
-      if (isEditMode) {
-        await updateGroupApi(groupToEdit.id, payload);
-        showToast(t("toast_update_success"), "success");
-      } else {
-        await createGroupApi(payload);
-        showToast(t("toast_create_success"), "success");
-      }
-      onSuccess();
-      onClose();
-    } catch (err) {
-      showToast(tError(err), "error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const currentMatrix = activeTab === "user" ? userMatrix : groupMatrix;
+  const {
+    name,
+    setName,
+    selectedPermissions,
+    activeTab,
+    setActiveTab,
+    isSubmitting,
+    isConfirmCancelOpen,
+    setIsConfirmCancelOpen,
+    searchKeyword,
+    setSearchKeyword,
+    searchResults,
+    isSearching,
+    isDropdownOpen,
+    searchRef,
+    isEditMode,
+    hasChanges,
+    currentMatrix,
+    handleSearchScroll,
+    handleSelectUser,
+    handleRemoveMember,
+    handleTogglePermission,
+    handleCancelWithCheck,
+    handleSubmit,
+  } = useGroupFormModal({ isOpen, onClose, groupToEdit, isViewMode, onSuccess });
 
   return (
     <div
@@ -240,6 +48,7 @@ const GroupFormModal = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm select-none animate-fade-in"
     >
       <div className="w-full max-w-xl max-h-[90vh] bg-white dark:bg-[#161b26] border border-gray-200 dark:border-[#232d42] rounded-2xl shadow-2xl flex flex-col relative overflow-hidden transition-colors">
+        {/* header: tiêu đề và nút đóng */}
         <div className="px-6 py-5 border-b border-gray-200 dark:border-[#232d42] flex justify-between items-start bg-gray-50 dark:bg-[#111622]/30 rounded-t-2xl relative transition-colors">
           <div className="space-y-1">
             <h3 className="text-md font-bold text-gray-900 dark:text-white tracking-wide">
@@ -262,6 +71,7 @@ const GroupFormModal = ({
           onSubmit={handleSubmit}
           className="p-6 space-y-6 flex-1 overflow-y-auto cyber-scrollbar"
         >
+          {/* khu vực identity: tên nhóm và tab chuyển phân hệ */}
           <div className="space-y-2.5">
             <label className="text-[10px] font-mono font-bold tracking-widest text-blue-600 dark:text-blue-400/90 uppercase">
               {t("identity")}
@@ -305,6 +115,7 @@ const GroupFormModal = ({
             </div>
           </div>
 
+          {/* bảng ma trận phân quyền rbac */}
           <div className="space-y-2.5">
             <label className="text-[10px] font-mono font-bold tracking-widest text-blue-600 dark:text-blue-400/90 uppercase">
               {t("rbac_matrix")}
@@ -350,6 +161,7 @@ const GroupFormModal = ({
             </div>
           </div>
 
+          {/* footer: nút hủy và nút lưu */}
           <div className="pt-5 mt-6 border-t border-gray-200 dark:border-[#232d42] flex justify-end gap-4 bg-white dark:bg-[#161b26]">
             {isViewMode ? (
               <button
@@ -377,7 +189,7 @@ const GroupFormModal = ({
                   {isSubmitting ? (
                     <>
                       <FiLoader size={14} className="animate-spin" />
-                      <span>{t("processing") || "Đang xử lý..."}</span>
+                      <span>{t("processing") || "processing"}</span>
                     </>
                   ) : (
                     <span>{isEditMode ? t("update") : t("initialize")}</span>
@@ -388,6 +200,7 @@ const GroupFormModal = ({
           </div>
         </form>
       </div>
+
       <ConfirmModal
         isOpen={isConfirmCancelOpen}
         onClose={() => setIsConfirmCancelOpen(false)}
@@ -401,6 +214,6 @@ const GroupFormModal = ({
     </div>
   );
 };
-
 // BKAV HaiHS: Component Tạo mới, Sửa đổi và Xem chi tiết nhóm quyền - end
+
 export default GroupFormModal;
